@@ -29,6 +29,9 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
 
   // Form State
   const [formData, setFormData] = useState({
+    tahunUsulan: '2025',
+    programName: '',
+    activityName: '',
     projectName: '',
     location: '',
     estimatedBudget: '',
@@ -77,21 +80,24 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:I');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:L');
       const formatted = rows.map((r: any[]) => {
         let reqs = {};
-        try { reqs = JSON.parse(r[7] || '{}'); } catch (e) {}
+        try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
         
         return {
           id: r[0],
           submittedAt: r[1],
-          projectName: r[2],
-          location: r[3],
-          estimatedBudget: parseFloat(r[4]) || 0,
-          justification: r[5],
-          zoomLink: r[6],
+          tahunUsulan: r[2],
+          programName: r[3],
+          activityName: r[4],
+          projectName: r[5],
+          location: r[6],
+          estimatedBudget: parseFloat(r[7]) || 0,
+          justification: r[8],
+          zoomLink: r[9],
           requirementsMet: reqs,
-          submittedBy: r[8]
+          submittedBy: r[11]
         } as Proposal;
       });
       
@@ -122,6 +128,9 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
       const rowData = [
         id,
         timestamp,
+        formData.tahunUsulan,
+        formData.programName,
+        formData.activityName,
         formData.projectName,
         formData.location,
         formData.estimatedBudget,
@@ -131,10 +140,10 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
         userName || userEmail
       ];
 
-      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:I', rowData);
+      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:L', rowData);
       
       setShowForm(false);
-      setFormData({ projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
+      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
       fetchProposals(selectedConfig.sheetId);
     } catch (err) {
       console.error('Submit failed', err);
@@ -280,6 +289,18 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">Tahun Usulan *</label>
+                <input required type="text" value={formData.tahunUsulan} onChange={e => setFormData({...formData, tahunUsulan: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">Nama Program</label>
+                <input type="text" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">Nama Kegiatan</label>
+                <input type="text" value={formData.activityName} onChange={e => setFormData({...formData, activityName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              </div>
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700">Nama Proyek / Pekerjaan *</label>
                 <input required type="text" value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               </div>
@@ -359,9 +380,18 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
                       <Calendar className="w-3.5 h-3.5" />
                       {new Date(proposal.submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       <span className="text-slate-300">&bull;</span>
+                      <span className="text-slate-500">Tahun Usulan: {proposal.tahunUsulan || 'N/A'}</span>
+                      <span className="text-slate-300">&bull;</span>
                       <span className="text-slate-500">Oleh {proposal.submittedBy}</span>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">{proposal.projectName}</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-1">{proposal.projectName}</h3>
+                    {(proposal.programName || proposal.activityName) && (
+                      <p className="text-sm font-semibold text-slate-600 mb-2">
+                        {proposal.programName && `Program: ${proposal.programName}`}
+                        {proposal.programName && proposal.activityName && ` | `}
+                        {proposal.activityName && `Kegiatan: ${proposal.activityName}`}
+                      </p>
+                    )}
                     <p className="text-sm text-slate-600 mb-4">{proposal.justification}</p>
                     
                     <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
@@ -372,6 +402,11 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
                       <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 font-medium">
                         <DollarSign className="w-4 h-4 text-slate-400" />
                         {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(proposal.estimatedBudget)}
+                        {selectedConfig?.pagu ? (
+                          <span className={`text-xs ml-1 ${proposal.estimatedBudget > selectedConfig.pagu ? 'text-red-500' : 'text-slate-500'}`}>
+                            ({((proposal.estimatedBudget / selectedConfig.pagu) * 100).toFixed(1)}% dari Pagu Bidang)
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-lg font-bold border border-green-100">
                         {reqsMetCount} / {totalReqs} Syarat Lengkap

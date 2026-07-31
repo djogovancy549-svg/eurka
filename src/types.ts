@@ -12,6 +12,9 @@ export interface BidangConfig {
 export interface Proposal {
   id: string;
   projectName: string;
+  programName?: string;
+  activityName?: string;
+  tahunUsulan?: string;
   location: string;
   estimatedBudget: number;
   justification: string;
