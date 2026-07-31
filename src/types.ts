@@ -11,6 +11,7 @@ export interface BidangConfig {
 
 export interface Proposal {
   id: string;
+  rowIndex?: number;
   projectName: string;
   programName?: string;
   activityName?: string;

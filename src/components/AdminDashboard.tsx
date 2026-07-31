@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { getRows } from '../sheetsApi';
+import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig } from '../types';
 import { getAllBidangConfigs } from '../services/configService';
-import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink } from 'lucide-react';
+import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2 } from 'lucide-react';
 
 interface AdminDashboardProps {
   userEmail: string;
   userName: string;
-  onJoinMeeting: (id: string) => void;
 }
 
-export default function AdminDashboard({ userEmail, userName, onJoinMeeting }: AdminDashboardProps) {
+export default function AdminDashboard({ userEmail, userName }: AdminDashboardProps) {
   const { requirements } = useRequirements();
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>('');
@@ -20,6 +19,29 @@ export default function AdminDashboard({ userEmail, userName, onJoinMeeting }: A
   
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [editingZoomId, setEditingZoomId] = useState<string | null>(null);
+  const [tempZoomLink, setTempZoomLink] = useState('');
+  const [savingZoom, setSavingZoom] = useState(false);
+
+  const handleSaveZoomLink = async (proposal: Proposal) => {
+    if (!selectedConfig?.sheetId || !proposal.rowIndex) return;
+    setSavingZoom(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      
+      await updateCell(token, selectedConfig.sheetId, `Proposals!J${proposal.rowIndex}`, tempZoomLink);
+      
+      setProposals(proposals.map(p => p.id === proposal.id ? { ...p, zoomLink: tempZoomLink } : p));
+      setEditingZoomId(null);
+    } catch (err) {
+      console.error('Failed to update zoom link', err);
+      alert('Gagal menyimpan link meeting');
+    } finally {
+      setSavingZoom(false);
+    }
+  };
 
   useEffect(() => {
     const fetchConfigs = async () => {
@@ -53,12 +75,13 @@ export default function AdminDashboard({ userEmail, userName, onJoinMeeting }: A
       if (!token) return;
       
       const rows = await getRows(token, sheetId, 'Proposals!A2:L');
-      const formatted = rows.map((r: any[]) => {
+      const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
         
         return {
           id: r[0],
+          rowIndex: index + 2,
           submittedAt: r[1],
           tahunUsulan: r[2],
           programName: r[3],
@@ -208,34 +231,62 @@ export default function AdminDashboard({ userEmail, userName, onJoinMeeting }: A
                     </div>
                   </div>
                   
-                  {proposal.zoomLink ? (
-                    <div className="flex flex-col gap-2">
-                      <a 
-                        href={proposal.zoomLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
-                      >
-                        <Video className="w-4 h-4" />
-                        Link Eksternal
-                      </a>
-                      <button 
-                        onClick={() => onJoinMeeting(proposal.id)}
-                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
-                      >
-                        <Video className="w-4 h-4" />
-                        Rapat In-App
-                      </button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => onJoinMeeting(proposal.id)}
-                      className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
-                    >
-                      <Video className="w-4 h-4" />
-                      Rapat In-App
-                    </button>
-                  )}
+                  <div className="flex-shrink-0 flex flex-col gap-2 min-w-[200px]">
+                    {editingZoomId === proposal.id ? (
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="url"
+                          placeholder="Link Google Meet..."
+                          value={tempZoomLink}
+                          onChange={(e) => setTempZoomLink(e.target.value)}
+                          className="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        />
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setEditingZoomId(null)}
+                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold transition-all"
+                          >
+                            Batal
+                          </button>
+                          <button 
+                            onClick={() => handleSaveZoomLink(proposal)}
+                            disabled={savingZoom}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                          >
+                            {savingZoom ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Simpan'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {proposal.zoomLink ? (
+                          <a 
+                            href={proposal.zoomLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                          >
+                            <Video className="w-4 h-4" />
+                            Gabung Meet
+                          </a>
+                        ) : (
+                          <div className="text-center px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm text-slate-500 font-medium mb-1">
+                            Belum ada link
+                          </div>
+                        )}
+                        <button 
+                          onClick={() => {
+                            setTempZoomLink(proposal.zoomLink || '');
+                            setEditingZoomId(proposal.id);
+                          }}
+                          className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2 rounded-xl text-sm font-bold transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Atur Google Meet
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );

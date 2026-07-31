@@ -10,10 +10,9 @@ import { v4 as uuidv4 } from 'uuid';
 interface BidangDashboardProps {
   userEmail: string;
   userName: string;
-  onJoinMeeting: (id: string) => void;
 }
 
-export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: BidangDashboardProps) {
+export default function BidangDashboard({ userEmail, userName }: BidangDashboardProps) {
   const { requirements } = useRequirements();
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>(localStorage.getItem('urk_selected_bidang') || '');
@@ -312,10 +311,6 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
                 <label className="text-sm font-medium text-slate-700">Estimasi Anggaran (Rp) *</label>
                 <input required type="number" min="0" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Link Zoom Meeting (Opsional)</label>
-                <input type="url" value={formData.zoomLink} onChange={e => setFormData({...formData, zoomLink: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              </div>
               <div className="md:col-span-2 space-y-1">
                 <label className="text-sm font-medium text-slate-700">Justifikasi / Urgensi *</label>
                 <textarea required rows={3} value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
@@ -414,34 +409,23 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
                     </div>
                   </div>
                   
-                  {proposal.zoomLink ? (
-                    <div className="flex flex-col gap-2">
+                  <div className="flex-shrink-0 flex flex-col justify-center min-w-[200px]">
+                    {proposal.zoomLink ? (
                       <a 
                         href={proposal.zoomLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                        className="flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-3 rounded-xl text-sm font-bold transition-all"
                       >
-                        <Video className="w-4 h-4" />
-                        Link Eksternal
+                        <Video className="w-5 h-5" />
+                        Gabung Google Meet
                       </a>
-                      <button 
-                        onClick={() => onJoinMeeting(proposal.id)}
-                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
-                      >
-                        <Video className="w-4 h-4" />
-                        Rapat In-App
-                      </button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => onJoinMeeting(proposal.id)}
-                      className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
-                    >
-                      <Video className="w-4 h-4" />
-                      Rapat In-App
-                    </button>
-                  )}
+                    ) : (
+                      <div className="text-center px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm text-slate-500 font-medium">
+                        Menunggu Jadwal Meet dari Admin
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

@@ -120,6 +120,22 @@ export const getRows = async (accessToken: string, spreadsheetId: string, range:
   return data.values || [];
 };
 
+export const updateCell = async (accessToken: string, spreadsheetId: string, range: string, value: string) => {
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      values: [[value]]
+    })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update cell at ${range}`);
+  }
+};
+
 export const clearRange = async (accessToken: string, spreadsheetId: string, range: string) => {
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:clear`, {
     method: 'POST',

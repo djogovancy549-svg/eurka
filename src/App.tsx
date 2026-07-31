@@ -8,14 +8,11 @@ import BidangDashboard from './components/BidangDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { LogOut, Settings as SettingsIcon, LayoutDashboard, FileSpreadsheet, Users, X } from 'lucide-react';
 import { ADMIN_EMAILS } from './types';
-import { JitsiMeeting } from '@jitsi/react-sdk';
 
 export default function App() {
   const [needsAuth, setNeedsAuth] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(localStorage.getItem('urk_spreadsheet_id'));
-  const [activeMeetingId, setActiveMeetingId] = useState<string | null>(null);
   
   const isAdmin = user && user.email && ADMIN_EMAILS.includes(user.email);
 
@@ -50,11 +47,6 @@ export default function App() {
 
   const handleLogout = async () => {
     await logout();
-  };
-
-  const updateSpreadsheetId = (id: string) => {
-    setSpreadsheetId(id);
-    localStorage.setItem('urk_spreadsheet_id', id);
   };
 
   if (needsAuth) {
@@ -148,47 +140,17 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {activeMeetingId && (
-            <div className="border-b border-slate-200 bg-black relative" style={{ height: '280px' }}>
-              <button 
-                onClick={() => setActiveMeetingId(null)}
-                className="absolute top-2 right-2 z-10 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-lg shadow-lg flex items-center gap-1 text-xs font-bold"
-              >
-                <X className="w-4 h-4" /> Tutup Rapat
-              </button>
-              <JitsiMeeting
-                domain="meet.jit.si"
-                roomName={`URK-Meeting-${activeMeetingId}`}
-                configOverwrite={{
-                  startWithAudioMuted: true,
-                  startWithVideoMuted: true,
-                  disableModeratorIndicator: true,
-                  startScreenSharing: false,
-                  enableEmailInStats: false,
-                  prejoinPageEnabled: false
-                }}
-                interfaceConfigOverwrite={{
-                  DISABLE_JOIN_LEAVE_NOTIFICATIONS: true
-                }}
-                userInfo={{
-                  displayName: user?.displayName || user?.email || 'Peserta'
-                }}
-                getIFrameRef={(iframeRef) => { iframeRef.style.height = '100%'; }}
-              />
-            </div>
-          )}
-
           <div className="flex-1 overflow-auto p-8">
             <div className="max-w-6xl mx-auto">
               <Routes>
                 {isAdmin ? (
                   <>
-                    <Route path="/" element={<AdminDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} onJoinMeeting={setActiveMeetingId} />} />
+                    <Route path="/" element={<AdminDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
                     <Route path="/settings" element={<Settings />} />
                   </>
                 ) : (
                   <>
-                    <Route path="/" element={<BidangDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} onJoinMeeting={setActiveMeetingId} />} />
+                    <Route path="/" element={<BidangDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </>
                 )}
