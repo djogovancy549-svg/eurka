@@ -4,6 +4,9 @@ import { auth } from './firebase';
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 provider.addScope('https://www.googleapis.com/auth/drive.file');
+provider.setCustomParameters({
+  client_id: '314768435291-c92orj1o1uk9k96l6qifitt716sd52j0.apps.googleusercontent.com'
+});
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
