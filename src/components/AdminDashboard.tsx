@@ -76,9 +76,13 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const handleSaveConfig = async () => {
     if (!selectedConfig) return;
     try {
+      // Extract sheet ID if user pasted full URL
+      const match = tempSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      const extractedSheetId = match ? match[1] : tempSheetId.trim();
+
       const updated = { 
         ...selectedConfig, 
-        sheetId: tempSheetId, 
+        sheetId: extractedSheetId, 
         folderUrl: tempFolderUrl,
         pagu: tempPagu
       };
@@ -87,6 +91,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setSelectedConfig(updated);
       setEditingConfig(false);
       fetchProposals(updated.sheetId);
+      alert('Konfigurasi bidang berhasil disimpan!');
     } catch (err) {
       alert('Gagal menyimpan konfigurasi bidang.');
     }

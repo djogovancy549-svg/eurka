@@ -39,7 +39,18 @@ export default function Settings() {
   const handleSaveConfig = async (config: BidangConfig) => {
     try {
       setSavingConfigId(config.id);
-      await saveBidangConfig(config);
+      
+      // Extract sheet ID if user pasted full URL
+      const sheetIdInput = config.sheetId || '';
+      const match = sheetIdInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      const extractedSheetId = match ? match[1] : sheetIdInput.trim();
+      
+      const configToSave = { ...config, sheetId: extractedSheetId };
+      await saveBidangConfig(configToSave);
+      
+      // Update local state with extracted ID
+      setConfigs(configs.map(c => c.id === config.id ? configToSave : c));
+      alert(`Konfigurasi bidang ${config.name} berhasil disimpan!`);
     } catch (err) {
       console.error(err);
       alert('Gagal menyimpan konfigurasi');
