@@ -9,9 +9,10 @@ import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink } from
 interface AdminDashboardProps {
   userEmail: string;
   userName: string;
+  onJoinMeeting: (id: string) => void;
 }
 
-export default function AdminDashboard({ userEmail, userName }: AdminDashboardProps) {
+export default function AdminDashboard({ userEmail, userName, onJoinMeeting }: AdminDashboardProps) {
   const { requirements } = useRequirements();
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>('');
@@ -190,16 +191,33 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                     </div>
                   </div>
                   
-                  {proposal.zoomLink && (
-                    <a 
-                      href={proposal.zoomLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  {proposal.zoomLink ? (
+                    <div className="flex flex-col gap-2">
+                      <a 
+                        href={proposal.zoomLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                      >
+                        <Video className="w-4 h-4" />
+                        Link Eksternal
+                      </a>
+                      <button 
+                        onClick={() => onJoinMeeting(proposal.id)}
+                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
+                      >
+                        <Video className="w-4 h-4" />
+                        Rapat In-App
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => onJoinMeeting(proposal.id)}
                       className="flex-shrink-0 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all"
                     >
                       <Video className="w-4 h-4" />
-                      Gabung Zoom
-                    </a>
+                      Rapat In-App
+                    </button>
                   )}
                 </div>
               </div>
