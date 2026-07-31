@@ -1,3 +1,14 @@
+export const ADMIN_EMAILS = ['djogovancy549@gmail.com'];
+export const BIDANG_LIST = ['SDA', 'PL', 'CK', 'BM', 'Tata Ruang', 'Sekretariat'];
+
+export interface BidangConfig {
+  id: string; // e.g., 'SDA'
+  name: string;
+  pagu: number;
+  sheetId: string;
+  folderUrl: string;
+}
+
 export interface Proposal {
   id: string;
   projectName: string;

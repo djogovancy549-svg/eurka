@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import { initAuth, googleSignIn, logout, getAccessToken } from './auth';
 import { User } from 'firebase/auth';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
-import { LogOut, Settings as SettingsIcon, LayoutDashboard, FileSpreadsheet } from 'lucide-react';
+import BidangDashboard from './components/BidangDashboard';
+import AdminDashboard from './components/AdminDashboard';
+import { LogOut, Settings as SettingsIcon, LayoutDashboard, FileSpreadsheet, Users } from 'lucide-react';
+import { ADMIN_EMAILS } from './types';
 
 export default function App() {
   const [needsAuth, setNeedsAuth] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(localStorage.getItem('urk_spreadsheet_id'));
+  
+  const isAdmin = user && user.email && ADMIN_EMAILS.includes(user.email);
 
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -98,29 +103,35 @@ export default function App() {
           
           <nav className="flex-1 px-4 py-2 space-y-1">
             <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-4 tracking-widest">Main Menu</div>
-            <Link to="/" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
-              <LayoutDashboard className="w-5 h-5" />
-              <span>Dashboard</span>
-            </Link>
-            <Link to="/settings" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
-              <SettingsIcon className="w-5 h-5" />
-              <span>Pengaturan Admin</span>
-            </Link>
+            
+            {isAdmin ? (
+              <>
+                <Link to="/" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
+                  <LayoutDashboard className="w-5 h-5" />
+                  <span>Dashboard Admin</span>
+                </Link>
+                <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-4 tracking-widest mt-4">Admin Tools</div>
+                <Link to="/settings" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
+                  <SettingsIcon className="w-5 h-5" />
+                  <span>Pengaturan Bidang</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
+                  <LayoutDashboard className="w-5 h-5" />
+                  <span>Dashboard Bidang</span>
+                </Link>
+              </>
+            )}
           </nav>
 
           <div className="p-6 mt-auto border-t border-slate-800">
-            <div className="bg-blue-950 rounded-2xl p-4 border border-blue-900/50 mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                <span className="text-[10px] text-slate-400">Google Sheets Sync</span>
-              </div>
-              <p className="text-xs text-slate-300">Connected: <span className="text-yellow-400 font-mono">{spreadsheetId ? 'Aktif' : 'Off'}</span></p>
-            </div>
             <div className="flex items-center gap-3 mb-4 px-2">
               <img src={user?.photoURL || ''} alt="Profile" className="w-10 h-10 rounded-full bg-slate-700 shadow-md" />
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-white truncate">{user?.displayName}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                <p className="text-xs text-slate-400 truncate">{isAdmin ? 'Admin Evalap' : 'Bidang User'}</p>
               </div>
             </div>
             <button 
@@ -135,24 +146,20 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {!spreadsheetId && (
-            <div className="bg-amber-50 border-b border-amber-200 p-4">
-              <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <p className="text-amber-800 text-sm font-medium">
-                  Google Sheet belum dikonfigurasi. Silakan atur Spreadsheet ID di Pengaturan.
-                </p>
-                <Link to="/settings" className="text-amber-900 text-sm font-semibold hover:underline">
-                  Buka Pengaturan &rarr;
-                </Link>
-              </div>
-            </div>
-          )}
-          
           <div className="flex-1 overflow-auto p-8">
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-6xl mx-auto">
               <Routes>
-                <Route path="/" element={<Dashboard spreadsheetId={spreadsheetId} userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
-                <Route path="/settings" element={<Settings spreadsheetId={spreadsheetId} updateSpreadsheetId={updateSpreadsheetId} />} />
+                {isAdmin ? (
+                  <>
+                    <Route path="/" element={<AdminDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </>
+                ) : (
+                  <>
+                    <Route path="/" element={<BidangDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </>
+                )}
               </Routes>
             </div>
           </div>
