@@ -3,8 +3,8 @@ import { getRows, appendRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST } from '../types';
-import { getAllBidangConfigs } from '../services/configService';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2 } from 'lucide-react';
+import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -23,6 +23,9 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [tempSheetId, setTempSheetId] = useState('');
+  const [tempFolderUrl, setTempFolderUrl] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -49,6 +52,10 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
     if (selectedBidangId && configs.length > 0) {
       const config = configs.find(c => c.id === selectedBidangId) || null;
       setSelectedConfig(config);
+      if (config) {
+        setTempSheetId(config.sheetId || '');
+        setTempFolderUrl(config.folderUrl || '');
+      }
       fetchProposals(config?.sheetId);
     }
   }, [selectedBidangId, configs]);
@@ -140,6 +147,20 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
   const toggleReq = (reqId: string) => {
     setFormData(prev => ({ ...prev, reqs: { ...prev.reqs, [reqId]: !prev.reqs[reqId] } }));
   };
+
+  const handleSaveConfig = async () => {
+    if (!selectedConfig) return;
+    try {
+      const updated = { ...selectedConfig, sheetId: tempSheetId, folderUrl: tempFolderUrl };
+      await saveBidangConfig(updated);
+      setConfigs(configs.map(c => c.id === updated.id ? updated : c));
+      setSelectedConfig(updated);
+      setEditingConfig(false);
+      fetchProposals(updated.sheetId);
+    } catch (err) {
+      alert('Gagal menyimpan konfigurasi bidang.');
+    }
+  };
   
   const totalBudget = proposals.reduce((sum, p) => sum + p.estimatedBudget, 0);
 
@@ -164,7 +185,7 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
 
           <button
             onClick={() => setShowForm(!showForm)}
-            disabled={!selectedConfig?.sheetId}
+            disabled={!selectedConfig?.sheetId && !editingConfig}
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {showForm ? 'Batal' : <><Plus className="w-5 h-5" /> Usulan Baru</>}
@@ -172,10 +193,59 @@ export default function BidangDashboard({ userEmail, userName, onJoinMeeting }: 
         </div>
       </header>
 
+      {/* Config Form if missing */}
+      {selectedConfig && (!selectedConfig.sheetId || editingConfig) && (
+        <div className="bg-amber-50 rounded-2xl shadow-sm border border-amber-200 p-6 mb-6">
+          <h3 className="text-amber-900 font-bold mb-2">Konfigurasi Bidang {selectedConfig.name}</h3>
+          <p className="text-amber-700 text-sm mb-4">
+            Anda perlu menautkan Google Sheet untuk menyimpan data usulan bidang ini. Admin juga akan melihat tautan ini.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-bold text-amber-800 mb-1">Spreadsheet ID</label>
+              <input 
+                type="text" 
+                value={tempSheetId} 
+                onChange={e => setTempSheetId(e.target.value)} 
+                placeholder="ID Google Sheet"
+                className="w-full border border-amber-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-amber-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-amber-800 mb-1">Folder Drive URL (Opsional)</label>
+              <input 
+                type="text" 
+                value={tempFolderUrl} 
+                onChange={e => setTempFolderUrl(e.target.value)} 
+                placeholder="Link Folder Google Drive"
+                className="w-full border border-amber-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-amber-500 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            {editingConfig && selectedConfig.sheetId && (
+              <button onClick={() => setEditingConfig(false)} className="px-4 py-2 text-amber-800 font-medium text-sm hover:bg-amber-100 rounded-lg">
+                Batal
+              </button>
+            )}
+            <button onClick={handleSaveConfig} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2">
+              <Save className="w-4 h-4" /> Simpan Konfigurasi
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Overview Stats */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-blue-500">
-          <p className="text-slate-500 text-xs font-bold uppercase mb-1">Total Usulan Bidang</p>
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-slate-500 text-xs font-bold uppercase">Total Usulan Bidang</p>
+            {selectedConfig?.sheetId && !editingConfig && (
+              <button onClick={() => setEditingConfig(true)} className="text-slate-400 hover:text-blue-600" title="Edit Konfigurasi">
+                <Edit2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           <div className="flex items-end justify-between">
             <span className="text-3xl font-black text-slate-800">{proposals.length}</span>
             <span className="text-blue-500 text-xs font-bold">Terdaftar</span>
