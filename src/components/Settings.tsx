@@ -8,6 +8,7 @@ export default function Settings() {
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
   const [savingConfigId, setSavingConfigId] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const { requirements, loading, error: reqError, saveRequirements } = useRequirements();
   const [localReqs, setLocalReqs] = useState<Requirement[]>([]);
@@ -50,7 +51,8 @@ export default function Settings() {
       
       // Update local state with extracted ID
       setConfigs(configs.map(c => c.id === config.id ? configToSave : c));
-      alert(`Konfigurasi bidang ${config.name} berhasil disimpan!`);
+      setSuccessMsg(`Konfigurasi bidang ${config.name} berhasil disimpan!`);
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       console.error(err);
       alert('Gagal menyimpan konfigurasi');
@@ -83,6 +85,13 @@ export default function Settings() {
           <p className="text-sm text-slate-500">Konfigurasi penyimpanan data ke Google Sheets dan atur syarat usulan.</p>
         </div>
       </header>
+
+      {successMsg && (
+        <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200 flex items-center justify-between">
+          {successMsg}
+          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700">✕</button>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 border-b-4 border-b-blue-500">
         <h3 className="text-lg font-semibold text-slate-900 mb-4">Pengaturan Bidang</h3>

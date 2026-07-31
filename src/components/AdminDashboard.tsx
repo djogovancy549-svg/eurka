@@ -24,6 +24,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [tempSheetId, setTempSheetId] = useState('');
   const [tempFolderUrl, setTempFolderUrl] = useState('');
   const [tempPagu, setTempPagu] = useState<number>(0);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [editingZoomId, setEditingZoomId] = useState<string | null>(null);
   const [tempZoomLink, setTempZoomLink] = useState('');
@@ -91,7 +92,8 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setSelectedConfig(updated);
       setEditingConfig(false);
       fetchProposals(updated.sheetId);
-      alert('Konfigurasi bidang berhasil disimpan!');
+      setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       alert('Gagal menyimpan konfigurasi bidang.');
     }
@@ -177,6 +179,13 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           )}
         </div>
       </header>
+
+      {successMsg && (
+        <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200 flex items-center justify-between">
+          {successMsg}
+          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700">✕</button>
+        </div>
+      )}
 
       {/* Config Form if editing */}
       {selectedConfig && (editingConfig || !selectedConfig.sheetId) && (

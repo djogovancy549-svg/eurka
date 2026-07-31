@@ -26,6 +26,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [editingConfig, setEditingConfig] = useState(false);
   const [tempSheetId, setTempSheetId] = useState('');
   const [tempFolderUrl, setTempFolderUrl] = useState('');
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -80,7 +81,8 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setSelectedConfig(updated);
       setEditingConfig(false);
       fetchProposals(updated.sheetId);
-      alert('Tautan berhasil disimpan!');
+      setSuccessMsg('Tautan berhasil disimpan!');
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       alert('Gagal menyimpan konfigurasi bidang.');
     }
@@ -221,6 +223,13 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           </button>
         </div>
       </header>
+
+      {successMsg && (
+        <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200 flex items-center justify-between">
+          {successMsg}
+          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700">✕</button>
+        </div>
+      )}
 
       {/* Config Form if missing or editing */}
       {selectedConfig && (!selectedConfig.sheetId || editingConfig) && (
