@@ -86,7 +86,45 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
   }
 };
 
+export const ensureProposalsSheet = async (accessToken: string, spreadsheetId: string) => {
+  try {
+    const metaResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (!metaResponse.ok) return;
+    const meta = await metaResponse.json();
+    const hasProposals = meta.sheets?.some((s: any) => s.properties.title === 'Proposals');
+
+    if (!hasProposals) {
+      // Add Proposals sheet
+      const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              addSheet: {
+                properties: { title: 'Proposals' }
+              }
+            }
+          ]
+        })
+      });
+      if (addRes.ok) {
+        // Initialize header row
+        await initSpreadsheetHeaders(accessToken, spreadsheetId);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not ensure Proposals sheet:', e);
+  }
+};
+
 export const appendRow = async (accessToken: string, spreadsheetId: string, range: string, values: any[]) => {
+  await ensureProposalsSheet(accessToken, spreadsheetId);
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`, {
     method: 'POST',
     headers: {
@@ -99,13 +137,16 @@ export const appendRow = async (accessToken: string, spreadsheetId: string, rang
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to append row to ${range}`);
+    const errText = await response.text();
+    console.error('Append row error details:', errText);
+    throw new Error(`Failed to append row to ${range}: ${errText}`);
   }
   
   return response.json();
 };
 
 export const getRows = async (accessToken: string, spreadsheetId: string, range: string) => {
+  await ensureProposalsSheet(accessToken, spreadsheetId);
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -113,7 +154,8 @@ export const getRows = async (accessToken: string, spreadsheetId: string, range:
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get rows from ${range}`);
+    // If range doesn't exist yet, return empty array instead of throwing
+    return [];
   }
   
   const data = await response.json();
