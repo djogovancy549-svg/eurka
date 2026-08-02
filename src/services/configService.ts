@@ -71,6 +71,7 @@ export const getAllBidangConfigs = async (): Promise<BidangConfig[]> => {
   } catch (e) {}
 
   const configs: BidangConfig[] = [];
+  let fetchFailed = false;
   try {
     const querySnapshot = await withTimeout(
       getDocs(collection(db, 'bidangConfigs')),
@@ -82,13 +83,16 @@ export const getAllBidangConfigs = async (): Promise<BidangConfig[]> => {
         configs.push(doc.data() as BidangConfig);
       });
       localStorage.setItem('cached_bidang_configs', JSON.stringify(configs));
+    } else {
+      fetchFailed = true;
     }
   } catch (e) {
     console.warn('Using cached bidang configs due to slow connection or error:', e);
+    fetchFailed = true;
   }
   
-  // Use Firestore result if non-empty, otherwise fallback to local cache
-  const sourceConfigs = configs.length > 0 ? configs : cachedConfigs;
+  // Use Firestore result if fetch succeeded, otherwise fallback to local cache
+  const sourceConfigs = fetchFailed ? cachedConfigs : configs;
 
   // If some are missing, fill them with defaults
   const filledConfigs = BIDANG_LIST.map(id => {
@@ -144,6 +148,7 @@ export const saveBidangConfig = async (config: BidangConfig) => {
     await withTimeout(setDoc(docRef, cleanConfig), 8000, undefined);
   } catch (e) {
     console.error('Failed to sync config to Firestore:', e);
+    throw e;
   }
 };
 

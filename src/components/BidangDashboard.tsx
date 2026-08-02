@@ -159,7 +159,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         const currentSelectedId = selectedConfig?.id;
         if (currentSelectedId) {
           const latestSelected = latestConfigs.find(c => c.id === currentSelectedId);
-          if (latestSelected && latestSelected.pagu !== selectedConfig?.pagu) {
+          if (latestSelected && JSON.stringify(latestSelected) !== JSON.stringify(selectedConfig)) {
              setConfigs(latestConfigs);
              setSelectedConfig(latestSelected);
           }
