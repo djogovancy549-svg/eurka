@@ -35,16 +35,24 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [activeFolderProposal, setActiveFolderProposal] = useState<Proposal | null>(null);
 
   const openExternalLink = (rawUrl?: string) => {
-    if (!rawUrl) return;
-    let url = rawUrl.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      if (url.includes('drive.google.com') || url.includes('docs.google.com') || url.includes('google.com')) {
-        url = 'https://' + url;
-      } else {
-        url = 'https://' + url;
-      }
+    if (!rawUrl) {
+      alert('Tautan folder belum diisi.');
+      return;
     }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    let url = rawUrl.trim();
+    if (url.match(/^(\d{1,3}\.){3}\d{1,3}$/) || url.includes('0.0.7.234') || url === '0.0.7.234') {
+      alert(`Tautan folder tidak valid (${url}). Harap masukkan tautan Google Drive yang valid (contoh: https://drive.google.com/drive/folders/...).`);
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    try {
+      new URL(url);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      alert(`Format tautan tidak valid: ${rawUrl}`);
+    }
   };
 
   const handleSaveZoomLink = async (proposal: Proposal) => {

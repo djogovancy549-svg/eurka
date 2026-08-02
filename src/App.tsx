@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import { initAuth, googleSignIn, logout, getAccessToken } from './auth';
 import { User } from 'firebase/auth';
-import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import BidangDashboard from './components/BidangDashboard';
 import AdminDashboard from './components/AdminDashboard';
