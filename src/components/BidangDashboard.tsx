@@ -343,7 +343,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       fetchProposals(configToUse.sheetId);
     } catch (err) {
       console.error('Submit failed', err);
-      alert('Gagal mengirim usulan. Pastikan Admin sudah mengatur ID Sheet yang benar dan Anda memiliki akses edit.');
+      alert(`Gagal mengirim usulan: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsSubmitting(false);
     }
