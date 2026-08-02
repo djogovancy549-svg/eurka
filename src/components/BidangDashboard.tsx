@@ -42,6 +42,30 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     reqs: {} as Record<string, boolean>
   });
 
+  const [attachments, setAttachments] = useState<{ name: string; url: string; size?: string; type?: string; uploadedAt?: string }[]>([]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const base64Url = uploadEvent.target?.result as string;
+        setAttachments(prev => [
+          ...prev,
+          {
+            name: file.name,
+            url: base64Url,
+            size: `${(file.size / 1024).toFixed(1)} KB`,
+            type: file.type,
+            uploadedAt: new Date().toISOString()
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const renderStatusBadge = (status?: string) => {
     switch (status) {
       case 'diterima':
@@ -121,10 +145,12 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:O');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:P');
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
+        let atts = [];
+        try { atts = JSON.parse(r[15] || '[]'); } catch (e) {}
         
         return {
           id: r[0],
@@ -142,7 +168,8 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           submittedBy: r[11],
           documentFolderUrl: r[12] || '',
           status: (r[13] as any) || 'pending',
-          adminNotes: r[14] || ''
+          adminNotes: r[14] || '',
+          attachments: atts
         } as Proposal;
       });
       
@@ -185,13 +212,15 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         userName || userEmail,
         formData.documentFolderUrl,
         'pending',
-        ''
+        '',
+        JSON.stringify(attachments)
       ];
 
-      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:O', rowData);
+      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:P', rowData);
       
       setShowForm(false);
       setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', documentFolderUrl: '', reqs: {} });
+      setAttachments([]);
       fetchProposals(selectedConfig.sheetId);
     } catch (err) {
       console.error('Submit failed', err);
@@ -414,6 +443,31 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 />
                 <p className="text-xs text-slate-500 mt-1">Tempel tautan folder Google Drive yang berisi proposal dan dokumen persyaratan lengkap untuk diakses admin.</p>
               </div>
+
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Folder className="w-4 h-4 text-indigo-600" /> Upload Berkas / Dokumen Pendukung Langsung dari Aplikasi (PDF, Excel, Word, dll)
+                </label>
+                <input 
+                  type="file" 
+                  multiple 
+                  onChange={handleFileUpload}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                />
+                {attachments.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs font-bold text-slate-700">Berkas yang akan diunggah:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {attachments.map((att, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg text-xs font-medium text-indigo-900">
+                          <span>{att.name} ({att.size})</span>
+                          <button type="button" onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="pt-4 border-t border-slate-100">
@@ -482,18 +536,60 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h3 className="text-xl font-bold text-slate-800">{proposal.projectName}</h3>
-                      {proposal.documentFolderUrl && (
+                      {proposal.documentFolderUrl ? (
                         <a
                           href={proposal.documentFolderUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
-                          title="Buka Folder / Dokumen Usulan"
+                          title="Buka Folder Google Drive Usulan"
                         >
-                          <Folder className="w-4 h-4 text-indigo-600" /> Buka Folder Dokumen
+                          <Folder className="w-4 h-4 text-indigo-600" /> Buka Folder Drive
                         </a>
+                      ) : selectedConfig?.folderUrl ? (
+                        <a
+                          href={selectedConfig.folderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
+                          title="Buka Folder Google Drive Bidang"
+                        >
+                          <Folder className="w-4 h-4 text-indigo-600" /> Folder Bidang
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => alert('Tautan folder Google Drive belum didaftarkan untuk usulan atau bidang ini.')}
+                          className="shrink-0 bg-slate-100 text-slate-400 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 border border-slate-200"
+                        >
+                          <Folder className="w-4 h-4" /> Belum Ada Folder
+                        </button>
                       )}
                     </div>
+
+                    {/* Attachments Display */}
+                    {proposal.attachments && proposal.attachments.length > 0 && (
+                      <div className="mt-3 mb-3 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                        <p className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1">
+                          <Folder className="w-3.5 h-3.5 text-indigo-600" /> Berkas Dokumen Diunggah dari Aplikasi ({proposal.attachments.length}):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {proposal.attachments.map((att, idx) => (
+                            <a
+                              key={idx}
+                              href={att.url}
+                              download={att.name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-900 transition-all shadow-sm"
+                            >
+                              <span>📄 {att.name}</span>
+                              {att.size && <span className="text-indigo-400 font-normal">({att.size})</span>}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {(proposal.programName || proposal.activityName) && (
                       <p className="text-sm font-semibold text-slate-600 mb-2">

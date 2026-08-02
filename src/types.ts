@@ -23,6 +23,7 @@ export interface Proposal {
   documentFolderUrl?: string;
   status?: 'pending' | 'diterima' | 'belum_lengkap' | 'revisi' | 'ditolak';
   adminNotes?: string;
+  attachments?: { name: string; url: string; size?: string; type?: string; uploadedAt?: string }[];
   requirementsMet: Record<string, boolean>;
   submittedBy: string;
   submittedAt: string;

@@ -49,6 +49,7 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
             { userEnteredValue: { stringValue: 'Document Folder URL' } },
             { userEnteredValue: { stringValue: 'Status' } },
             { userEnteredValue: { stringValue: 'Admin Notes' } },
+            { userEnteredValue: { stringValue: 'Attachments' } },
           ]
         }],
         fields: 'userEnteredValue'
