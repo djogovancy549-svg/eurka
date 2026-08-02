@@ -221,6 +221,18 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setSelectedConfig(updated);
       setEditingConfig(false);
       fetchProposals(updated.sheetId);
+      
+      // Update spreadsheet with Pagu Indikatif so it's visible there too
+      try {
+        const token = await getAccessToken();
+        if (token && updated.sheetId) {
+          await updateCell(token, updated.sheetId, 'Proposals!R1', 'PAGU INDIKATIF');
+          await updateCell(token, updated.sheetId, 'Proposals!R2', updated.pagu.toString());
+        }
+      } catch (e) {
+        console.warn('Failed to write pagu to sheet:', e);
+      }
+
       setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
