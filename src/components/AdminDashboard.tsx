@@ -223,8 +223,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       fetchProposals(updated.sheetId);
       setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
       setTimeout(() => setSuccessMsg(null), 3000);
-    } catch (err) {
-      alert('Gagal menyimpan konfigurasi bidang.');
+    } catch (err: any) {
+      alert(`Gagal menyimpan konfigurasi bidang: ${err.message || err}`);
+      console.error(err);
     }
   };
 
