@@ -383,6 +383,27 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
             <Settings className="w-4 h-4" /> Pengaturan Bidang
           </button>
           <button
+            onClick={async () => {
+              if (confirm('Apakah Anda yakin ingin menginisialisasi ulang header tabel? Ini akan menimpa baris pertama di sheet "Proposals".')) {
+                try {
+                  const token = await getAccessToken();
+                  if (token && selectedConfig?.sheetId) {
+                    await initSpreadsheetHeaders(token, selectedConfig.sheetId);
+                    alert('Header berhasil diinisialisasi ulang.');
+                  }
+                } catch (e) {
+                  console.error(e);
+                  alert('Gagal menginisialisasi header.');
+                }
+              }
+            }}
+            className="bg-amber-50 hover:bg-amber-100 text-amber-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-amber-200 shadow-sm"
+            title="Inisialisasi ulang header tabel jika sheet kosong atau rusak"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Init Header</span>
+          </button>
+          <button
             onClick={handleRefreshData}
             disabled={isRefreshing}
             className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-blue-200 shadow-sm"
