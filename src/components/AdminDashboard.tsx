@@ -223,12 +223,14 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
     // 1. Try Save to Firestore
     try {
+       console.log('--- START SAVING TO FIRESTORE ---');
        await saveBidangConfig(updated);
+       console.log('--- SUCCESSFULLY SAVED TO FIRESTORE ---');
        setConfigs(configs.map(c => c.id === updated.id ? updated : c));
        setSelectedConfig(updated);
        setEditingConfig(false);
     } catch (err: any) {
-       console.error('Save to Firestore failed:', err);
+       console.error('--- FIRESTORE SAVE FAILED ---:', err);
        firestoreFailed = true;
        firestoreError = err.message || err;
     }
