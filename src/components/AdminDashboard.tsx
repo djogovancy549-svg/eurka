@@ -32,6 +32,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState('');
+  const [activeFolderProposal, setActiveFolderProposal] = useState<Proposal | null>(null);
 
   const handleSaveZoomLink = async (proposal: Proposal) => {
     if (!selectedConfig?.sheetId || !proposal.rowIndex) return;
@@ -365,35 +366,14 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h3 className="text-xl font-bold text-slate-800">{proposal.projectName}</h3>
-                      {proposal.documentFolderUrl ? (
-                        <a
-                          href={proposal.documentFolderUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
-                          title="Buka Folder Google Drive Usulan"
-                        >
-                          <Folder className="w-4 h-4 text-indigo-600" /> Buka Folder Drive
-                        </a>
-                      ) : selectedConfig?.folderUrl ? (
-                        <a
-                          href={selectedConfig.folderUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
-                          title="Buka Folder Google Drive Bidang"
-                        >
-                          <Folder className="w-4 h-4 text-indigo-600" /> Folder Bidang
-                        </a>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => alert('Tautan folder Google Drive belum didaftarkan untuk usulan atau bidang ini.')}
-                          className="shrink-0 bg-slate-100 text-slate-400 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 border border-slate-200"
-                        >
-                          <Folder className="w-4 h-4" /> Belum Ada Folder
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveFolderProposal(proposal)}
+                        className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all shadow-sm"
+                        title="Kelola & Buka Dokumen / Folder"
+                      >
+                        <Folder className="w-4 h-4 text-indigo-600" /> Buka Dokumen & Folder
+                      </button>
                     </div>
 
                     {/* Attachments Display */}
@@ -579,6 +559,99 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           })
         )}
       </div>
+
+      {activeFolderProposal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 space-y-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <Folder className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Kelola Dokumen & Folder</h3>
+                  <p className="text-xs text-slate-500 truncate max-w-xs">{activeFolderProposal.projectName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveFolderProposal(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Tautan Google Drive Folder:</p>
+                {activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl || ''}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-600 outline-none"
+                    />
+                    <a
+                      href={activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Buka Folder
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">Belum ada link Google Drive yang didaftarkan untuk usulan atau bidang ini.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
+                  Berkas Dokumen Diunggah dari Aplikasi ({activeFolderProposal.attachments?.length || 0}):
+                </p>
+                {activeFolderProposal.attachments && activeFolderProposal.attachments.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {activeFolderProposal.attachments.map((att, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-all">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <span className="text-lg">📄</span>
+                          <div className="overflow-hidden">
+                            <p className="text-xs font-bold text-slate-800 truncate">{att.name}</p>
+                            <p className="text-[10px] text-slate-400">{att.size || 'Berkas Dokumen'}</p>
+                          </div>
+                        </div>
+                        <a
+                          href={att.url}
+                          download={att.name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Unduh / Lihat
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                    <p className="text-xs text-slate-500 font-medium">Belum ada berkas dokumen yang diunggah langsung dari aplikasi untuk usulan ini.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setActiveFolderProposal(null)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
