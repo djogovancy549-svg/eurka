@@ -274,18 +274,28 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedConfig?.sheetId) {
+    
+    // Refresh config first to ensure we have the latest sheetId
+    const latestConfigs = await getAllBidangConfigs();
+    const currentConfig = latestConfigs.find(c => c.id === selectedBidangId) || null;
+    if (currentConfig) {
+      setConfigs(latestConfigs);
+      setSelectedConfig(currentConfig);
+    }
+    const configToUse = currentConfig || selectedConfig;
+
+    if (!configToUse?.sheetId) {
       alert("Spreadsheet belum dikonfigurasi oleh Admin untuk bidang ini.");
       return;
     }
 
     const numericBudget = parseMoney(formData.estimatedBudget);
-    if (selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 && selectedConfig.pagu > 0) {
-      const rule = selectedConfig.budgetRules.find(r => 
+    if (configToUse?.budgetRules && configToUse.budgetRules.length > 0 && configToUse.pagu > 0) {
+      const rule = configToUse.budgetRules.find(r => 
         r.programName.toLowerCase().trim() === formData.programName.toLowerCase().trim()
       );
       if (rule) {
-        const maxAllowed = (selectedConfig.pagu * rule.maxPercentage) / 100;
+        const maxAllowed = (configToUse.pagu * rule.maxPercentage) / 100;
         if (numericBudget > maxAllowed) {
           alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) melebihi batasan maksimal untuk program "${rule.programName}" (${rule.maxPercentage}% dari Pagu = ${formatRupiah(maxAllowed)}) yang ditentukan oleh Admin.`);
           setIsSubmitting(false);
@@ -315,14 +325,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         formData.zoomLink,
         JSON.stringify(formData.reqs),
         userName || userEmail,
-        selectedConfig?.folderUrl || '',
+        configToUse?.folderUrl || '',
         'pending',
         '',
         JSON.stringify(attachments),
         formData.jenisUsulan
       ];
 
-      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:P', rowData);
+      await appendRow(token, configToUse.sheetId, 'Proposals!A:P', rowData);
       
       // Notify Admin
       await notifyAdminNewProposal();
@@ -330,7 +340,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setShowForm(false);
       setFormData({ tahunUsulan: '2025', jenisUsulan: '', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
       setAttachments([]);
-      fetchProposals(selectedConfig.sheetId);
+      fetchProposals(configToUse.sheetId);
     } catch (err) {
       console.error('Submit failed', err);
       alert('Gagal mengirim usulan. Pastikan Admin sudah mengatur ID Sheet yang benar dan Anda memiliki akses edit.');
