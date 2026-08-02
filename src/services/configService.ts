@@ -133,7 +133,9 @@ export const saveBidangConfig = async (config: BidangConfig) => {
     const cleanConfig = JSON.parse(JSON.stringify(config));
     
     const docRef = doc(db, 'bidangConfigs', config.id);
+    console.log('Attempting to write to:', docRef.path, 'with data:', cleanConfig);
     await withTimeout(setDoc(docRef, cleanConfig), 8000, undefined);
+    console.log('Successfully wrote to:', docRef.path);
   } catch (e) {
     console.error('Failed to sync config to Firestore:', e);
     throw e;
