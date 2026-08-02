@@ -56,6 +56,7 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
             { userEnteredValue: { stringValue: 'Status' } },
             { userEnteredValue: { stringValue: 'Admin Notes' } },
             { userEnteredValue: { stringValue: 'Attachments' } },
+            { userEnteredValue: { stringValue: 'Jenis Usulan' } },
           ]
         }],
         fields: 'userEnteredValue'
@@ -166,7 +167,7 @@ export const appendRow = async (accessToken: string, spreadsheetId: string, rang
   }
 
   // Update exactly at the next row
-  const updateRange = `${sheetName}!A${nextRow}:P${nextRow}`;
+  const updateRange = `${sheetName}!A${nextRow}:Q${nextRow}`;
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     headers: {
