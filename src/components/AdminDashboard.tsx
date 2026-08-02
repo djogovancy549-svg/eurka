@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
@@ -160,6 +162,15 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   useEffect(() => {
     proposalsRef.current = proposals;
   }, [proposals]);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'appConfig', 'newProposalNotification'), (docSnap) => {
+      if (docSnap.exists()) {
+        setHasNewData(true);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!selectedConfig?.sheetId) return;

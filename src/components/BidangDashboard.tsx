@@ -3,7 +3,7 @@ import { getRows, appendRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements } from '../types';
-import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
+import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal } from '../services/configService';
 import { parseMoney, formatRupiah, printRekapanDisetujui } from '../utils';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -324,6 +324,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
       await appendRow(token, selectedConfig.sheetId, 'Proposals!A:P', rowData);
       
+      // Notify Admin
+      await notifyAdminNewProposal();
+
       setShowForm(false);
       setFormData({ tahunUsulan: '2025', jenisUsulan: '', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
       setAttachments([]);
@@ -567,6 +570,24 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                   <option value="Baru">Baru</option>
                   <option value="Lanjutan">Lanjutan</option>
                 </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">Nama Program *</label>
+                {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 ? (
+                  <select 
+                    required 
+                    value={formData.programName} 
+                    onChange={e => setFormData({...formData, programName: e.target.value})} 
+                    className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">Pilih Program</option>
+                    {selectedConfig.budgetRules.map((rule, idx) => (
+                      <option key={idx} value={rule.programName}>{rule.programName}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input required type="text" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700">Nama Kegiatan</label>

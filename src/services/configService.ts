@@ -182,3 +182,12 @@ export const getBidangConfig = async (id: string): Promise<BidangConfig | null> 
   return null;
 };
 
+export const notifyAdminNewProposal = async () => {
+  try {
+    const docRef = doc(db, 'appConfig', 'newProposalNotification');
+    await setDoc(docRef, { lastUpdated: Date.now() });
+  } catch (e) {
+    console.error('Failed to notify admin:', e);
+  }
+};
+
