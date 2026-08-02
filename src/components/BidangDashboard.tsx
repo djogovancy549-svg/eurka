@@ -60,7 +60,6 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     estimatedBudget: '',
     justification: '',
     zoomLink: '',
-    documentFolderUrl: '',
     reqs: {} as Record<string, boolean>
   });
 
@@ -232,7 +231,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         formData.zoomLink,
         JSON.stringify(formData.reqs),
         userName || userEmail,
-        formData.documentFolderUrl,
+        selectedConfig?.folderUrl || '',
         'pending',
         '',
         JSON.stringify(attachments)
@@ -241,7 +240,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       await appendRow(token, selectedConfig.sheetId, 'Proposals!A:P', rowData);
       
       setShowForm(false);
-      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', documentFolderUrl: '', reqs: {} });
+      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
       setAttachments([]);
       fetchProposals(selectedConfig.sheetId);
     } catch (err) {
@@ -452,18 +451,30 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 <label className="text-sm font-medium text-slate-700">Justifikasi / Urgensi *</label>
                 <textarea required rows={3} value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               </div>
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                  <Folder className="w-4 h-4 text-indigo-600" /> Link Folder Google Drive / Dokumen Persyaratan Usulan
-                </label>
-                <input 
-                  type="url" 
-                  placeholder="https://drive.google.com/drive/folders/..." 
-                  value={formData.documentFolderUrl} 
-                  onChange={e => setFormData({...formData, documentFolderUrl: e.target.value})} 
-                  className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
-                />
-                <p className="text-xs text-slate-500 mt-1">Tempel tautan folder Google Drive yang berisi proposal dan dokumen persyaratan lengkap untuk diakses admin.</p>
+              <div className="md:col-span-2 space-y-2">
+                <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                      <Folder className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-indigo-900">Folder Google Drive Bidang (Terdaftar Otomatis)</p>
+                      <p className="text-xs text-indigo-700 truncate max-w-md">
+                        {selectedConfig?.folderUrl || 'Belum diatur di konfigurasi bidang'}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedConfig?.folderUrl && (
+                    <button
+                      type="button"
+                      onClick={() => openExternalLink(selectedConfig.folderUrl)}
+                      className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Buka Folder
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">Tautan folder Google Drive tidak perlu dimasukkan berulang kali. Cukup unggah berkas di bawah sesuai nama usulan.</p>
               </div>
 
               <div className="md:col-span-2 space-y-2">
