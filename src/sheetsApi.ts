@@ -24,7 +24,13 @@ export const createSpreadsheet = async (accessToken: string, title: string) => {
     throw new Error('Failed to create spreadsheet');
   }
   
-  return response.json();
+  const data = await response.json();
+  try {
+    await initSpreadsheetHeaders(accessToken, data.spreadsheetId);
+  } catch (err) {
+    console.warn('Failed to init spreadsheet headers on create:', err);
+  }
+  return data;
 };
 
 export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId: string) => {
@@ -123,6 +129,17 @@ export const ensureProposalsSheet = async (accessToken: string, spreadsheetId: s
       if (addRes.ok) {
         // Initialize header row
         await initSpreadsheetHeaders(accessToken, spreadsheetId);
+      }
+    } else {
+      // Check if A1 is empty, if so initialize headers
+      const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Proposals!A1:A1`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (valRes.ok) {
+        const valData = await valRes.json();
+        if (!valData.values || valData.values.length === 0 || !valData.values[0][0]) {
+          await initSpreadsheetHeaders(accessToken, spreadsheetId);
+        }
       }
     }
   } catch (e) {
