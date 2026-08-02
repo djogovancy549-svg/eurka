@@ -1,4 +1,8 @@
+// ⚠️ UBAH EMAIL ADMIN DI SINI
+// Anda dapat menambahkan lebih dari satu email admin, pisahkan dengan koma:
+// export const ADMIN_EMAILS = ['admin1@gmail.com', 'admin2@gmail.com'];
 export const ADMIN_EMAILS = ['djogovancy549@gmail.com'];
+
 export const BIDANG_LIST = [
   'SDA', 'PL', 'CK', 'BM', 'Tata Ruang', 'Sekretariat',
   'Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)'
