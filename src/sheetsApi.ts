@@ -149,8 +149,26 @@ export const ensureProposalsSheet = async (accessToken: string, spreadsheetId: s
 
 export const appendRow = async (accessToken: string, spreadsheetId: string, range: string, values: any[]) => {
   await ensureProposalsSheet(accessToken, spreadsheetId);
-  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`, {
-    method: 'POST',
+  
+  // Find exactly how many rows exist so we don't append to row 1001 if there are empty formatted rows.
+  // Assuming range is something like 'Proposals!A:P', we fetch 'Proposals!A:A'
+  const sheetName = range.split('!')[0];
+  const rowResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A:A`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  
+  let nextRow = 2; // Default to row 2 if only header or empty
+  if (rowResponse.ok) {
+    const rowData = await rowResponse.json();
+    if (rowData.values) {
+      nextRow = rowData.values.length + 1;
+    }
+  }
+
+  // Update exactly at the next row
+  const updateRange = `${sheetName}!A${nextRow}:P${nextRow}`;
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
