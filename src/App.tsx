@@ -5,6 +5,7 @@ import { User } from 'firebase/auth';
 import Settings from './components/Settings';
 import BidangDashboard from './components/BidangDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import PlanningBanner from './components/PlanningBanner';
 import { LogOut, Settings as SettingsIcon, LayoutDashboard, FileSpreadsheet, Users, X } from 'lucide-react';
 import { ADMIN_EMAILS } from './types';
 
@@ -141,6 +142,7 @@ export default function App() {
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 overflow-auto p-8">
             <div className="max-w-6xl mx-auto">
+              <PlanningBanner />
               <Routes>
                 {isAdmin ? (
                   <>
