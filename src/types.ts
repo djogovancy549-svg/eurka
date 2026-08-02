@@ -31,6 +31,7 @@ export interface Proposal {
   programName?: string;
   activityName?: string;
   tahunUsulan?: string;
+  jenisUsulan?: string;
   location: string;
   estimatedBudget: number;
   justification: string;

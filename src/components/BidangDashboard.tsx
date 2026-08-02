@@ -58,6 +58,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   // Form State
   const [formData, setFormData] = useState({
     tahunUsulan: '2025',
+    jenisUsulan: '',
     programName: '',
     activityName: '',
     projectName: '',
@@ -257,7 +258,8 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           documentFolderUrl: r[12] || '',
           status: (r[13] as any) || 'pending',
           adminNotes: r[14] || '',
-          attachments: atts
+          attachments: atts,
+          jenisUsulan: r[16]
         } as Proposal;
       });
       
@@ -316,13 +318,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         selectedConfig?.folderUrl || '',
         'pending',
         '',
-        JSON.stringify(attachments)
+        JSON.stringify(attachments),
+        formData.jenisUsulan
       ];
 
       await appendRow(token, selectedConfig.sheetId, 'Proposals!A:P', rowData);
       
       setShowForm(false);
-      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
+      setFormData({ tahunUsulan: '2025', jenisUsulan: '', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
       setAttachments([]);
       fetchProposals(selectedConfig.sheetId);
     } catch (err) {
@@ -558,8 +561,12 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 <input required type="text" value={formData.tahunUsulan} onChange={e => setFormData({...formData, tahunUsulan: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Nama Program</label>
-                <input type="text" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                <label className="text-sm font-medium text-slate-700">Jenis Usulan *</label>
+                <select required value={formData.jenisUsulan} onChange={e => setFormData({...formData, jenisUsulan: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                  <option value="">Pilih Jenis</option>
+                  <option value="Baru">Baru</option>
+                  <option value="Lanjutan">Lanjutan</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700">Nama Kegiatan</label>
