@@ -29,6 +29,19 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeFolderProposal, setActiveFolderProposal] = useState<Proposal | null>(null);
 
+  const openExternalLink = (rawUrl?: string) => {
+    if (!rawUrl) return;
+    let url = rawUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (url.includes('drive.google.com') || url.includes('docs.google.com') || url.includes('google.com')) {
+        url = 'https://' + url;
+      } else {
+        url = 'https://' + url;
+      }
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   // Form State
   const [formData, setFormData] = useState({
     tahunUsulan: '2025',
@@ -666,14 +679,13 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                       value={activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl || ''}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-600 outline-none"
                     />
-                    <a
-                      href={activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+                    <button
+                      type="button"
+                      onClick={() => openExternalLink(activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl)}
+                      className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
                     >
                       <ExternalLink className="w-3.5 h-3.5" /> Buka Folder
-                    </a>
+                    </button>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 italic">Belum ada link Google Drive yang didaftarkan untuk usulan atau bidang ini.</p>
