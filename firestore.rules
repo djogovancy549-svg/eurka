@@ -12,7 +12,7 @@ service cloud.firestore {
 
     // Konfigurasi Bidang (Spreadsheet ID, Folder Drive URL, Pagu Indikatif)
     match /bidangConfigs/{docId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Catch-all default deny for any other unspecified paths
