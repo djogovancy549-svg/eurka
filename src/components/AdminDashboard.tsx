@@ -4,7 +4,7 @@ import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
-import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save } from 'lucide-react';
+import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 
 interface AdminDashboardProps {
   userEmail: string;
@@ -30,6 +30,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [tempZoomLink, setTempZoomLink] = useState('');
   const [savingZoom, setSavingZoom] = useState(false);
 
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [tempNotes, setTempNotes] = useState('');
+
   const handleSaveZoomLink = async (proposal: Proposal) => {
     if (!selectedConfig?.sheetId || !proposal.rowIndex) return;
     setSavingZoom(true);
@@ -46,6 +49,46 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       alert('Gagal menyimpan link meeting');
     } finally {
       setSavingZoom(false);
+    }
+  };
+
+  const handleUpdateStatus = async (proposal: Proposal, newStatus: string) => {
+    try {
+      const token = await getAccessToken();
+      if (!token || !selectedConfig?.sheetId || !proposal.rowIndex) return;
+      await updateCell(token, selectedConfig.sheetId, `Proposals!N${proposal.rowIndex}`, newStatus);
+      setProposals(proposals.map(p => p.id === proposal.id ? { ...p, status: newStatus as any } : p));
+    } catch (e) {
+      console.error('Failed to update status', e);
+      alert('Gagal memperbarui status usulan.');
+    }
+  };
+
+  const handleSaveNotes = async (proposal: Proposal) => {
+    try {
+      const token = await getAccessToken();
+      if (!token || !selectedConfig?.sheetId || !proposal.rowIndex) return;
+      await updateCell(token, selectedConfig.sheetId, `Proposals!O${proposal.rowIndex}`, tempNotes);
+      setProposals(proposals.map(p => p.id === proposal.id ? { ...p, adminNotes: tempNotes } : p));
+      setEditingNotesId(null);
+    } catch (e) {
+      console.error('Failed to save notes', e);
+      alert('Gagal menyimpan catatan admin.');
+    }
+  };
+
+  const renderStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'diterima':
+        return <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200"><CheckCircle className="w-3 h-3" /> Diterima</span>;
+      case 'belum_lengkap':
+        return <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-200"><AlertTriangle className="w-3 h-3" /> Belum Lengkap</span>;
+      case 'revisi':
+        return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
+      case 'ditolak':
+        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
+      default:
+        return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
     }
   };
 
@@ -111,7 +154,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:L');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:O');
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
@@ -129,7 +172,10 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           justification: r[8],
           zoomLink: r[9],
           requirementsMet: reqs,
-          submittedBy: r[11]
+          submittedBy: r[11],
+          documentFolderUrl: r[12] || '',
+          status: (r[13] as any) || 'pending',
+          adminNotes: r[14] || ''
         } as Proposal;
       });
       
@@ -304,15 +350,31 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
               <div key={proposal.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">
                       <Calendar className="w-3.5 h-3.5" />
                       {new Date(proposal.submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       <span className="text-slate-300">&bull;</span>
                       <span className="text-slate-500">Tahun Usulan: {proposal.tahunUsulan || 'N/A'}</span>
                       <span className="text-slate-300">&bull;</span>
                       <span className="text-slate-500">Oleh {proposal.submittedBy}</span>
+                      <span className="ml-auto">{renderStatusBadge(proposal.status)}</span>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-1">{proposal.projectName}</h3>
+
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="text-xl font-bold text-slate-800">{proposal.projectName}</h3>
+                      {proposal.documentFolderUrl && (
+                        <a
+                          href={proposal.documentFolderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
+                          title="Buka Folder / Dokumen Usulan"
+                        >
+                          <Folder className="w-4 h-4 text-indigo-600" /> Buka Dokumen Usulan
+                        </a>
+                      )}
+                    </div>
+
                     {(proposal.programName || proposal.activityName) && (
                       <p className="text-sm font-semibold text-slate-600 mb-2">
                         {proposal.programName && `Program: ${proposal.programName}`}
@@ -322,7 +384,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                     )}
                     <p className="text-sm text-slate-600 mb-4">{proposal.justification}</p>
                     
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 mb-4">
                       <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 font-medium">
                         <MapPin className="w-4 h-4 text-slate-400" />
                         {proposal.location}
@@ -338,6 +400,74 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                       </div>
                       <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-lg font-bold border border-green-100">
                         {reqsMetCount} / {totalReqs} Syarat Lengkap
+                      </div>
+                    </div>
+
+                    {/* Admin Verification & Notes Box */}
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Status Verifikasi:</span>
+                          <select
+                            value={proposal.status || 'pending'}
+                            onChange={(e) => handleUpdateStatus(proposal, e.target.value)}
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                          >
+                            <option value="pending">⏳ Menunggu Verifikasi</option>
+                            <option value="diterima">✅ Diterima</option>
+                            <option value="belum_lengkap">⚠️ Belum Lengkap</option>
+                            <option value="revisi">🔄 Di-revisi</option>
+                            <option value="ditolak">❌ Ditolak</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Admin Notes */}
+                      <div className="pt-2 border-t border-slate-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-slate-700">Catatan Admin / Evaluasi:</span>
+                          {editingNotesId !== proposal.id && (
+                            <button
+                              onClick={() => {
+                                setEditingNotesId(proposal.id);
+                                setTempNotes(proposal.adminNotes || '');
+                              }}
+                              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" /> {proposal.adminNotes ? 'Edit Catatan' : '+ Tambah Catatan'}
+                            </button>
+                          )}
+                        </div>
+
+                        {editingNotesId === proposal.id ? (
+                          <div className="space-y-2 mt-2">
+                            <textarea
+                              rows={2}
+                              value={tempNotes}
+                              onChange={(e) => setTempNotes(e.target.value)}
+                              placeholder="Tuliskan catatan verifikasi, kekurangan dokumen, atau revisi..."
+                              className="w-full border border-slate-300 bg-white rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setEditingNotesId(null)}
+                                className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg"
+                              >
+                                Batal
+                              </button>
+                              <button
+                                onClick={() => handleSaveNotes(proposal)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                              >
+                                <Save className="w-3 h-3" /> Simpan Catatan
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-600 italic">
+                            {proposal.adminNotes ? `"${proposal.adminNotes}"` : 'Belum ada catatan dari admin.'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

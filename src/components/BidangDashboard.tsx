@@ -4,7 +4,7 @@ import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2 } from 'lucide-react';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -38,8 +38,24 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     estimatedBudget: '',
     justification: '',
     zoomLink: '',
+    documentFolderUrl: '',
     reqs: {} as Record<string, boolean>
   });
+
+  const renderStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'diterima':
+        return <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200"><CheckCircle className="w-3 h-3" /> Diterima</span>;
+      case 'belum_lengkap':
+        return <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-200"><AlertTriangle className="w-3 h-3" /> Belum Lengkap</span>;
+      case 'revisi':
+        return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
+      case 'ditolak':
+        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
+      default:
+        return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
+    }
+  };
 
   useEffect(() => {
     const fetchConfigs = async () => {
@@ -105,13 +121,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:L');
-      const formatted = rows.map((r: any[]) => {
+      const rows = await getRows(token, sheetId, 'Proposals!A2:O');
+      const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
         
         return {
           id: r[0],
+          rowIndex: index + 2,
           submittedAt: r[1],
           tahunUsulan: r[2],
           programName: r[3],
@@ -122,7 +139,10 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           justification: r[8],
           zoomLink: r[9],
           requirementsMet: reqs,
-          submittedBy: r[11]
+          submittedBy: r[11],
+          documentFolderUrl: r[12] || '',
+          status: (r[13] as any) || 'pending',
+          adminNotes: r[14] || ''
         } as Proposal;
       });
       
@@ -162,13 +182,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         formData.justification,
         formData.zoomLink,
         JSON.stringify(formData.reqs),
-        userName || userEmail
+        userName || userEmail,
+        formData.documentFolderUrl,
+        'pending',
+        ''
       ];
 
-      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:L', rowData);
+      await appendRow(token, selectedConfig.sheetId, 'Proposals!A:O', rowData);
       
       setShowForm(false);
-      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
+      setFormData({ tahunUsulan: '2025', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', documentFolderUrl: '', reqs: {} });
       fetchProposals(selectedConfig.sheetId);
     } catch (err) {
       console.error('Submit failed', err);
@@ -378,6 +401,19 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 <label className="text-sm font-medium text-slate-700">Justifikasi / Urgensi *</label>
                 <textarea required rows={3} value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               </div>
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Folder className="w-4 h-4 text-indigo-600" /> Link Folder Google Drive / Dokumen Persyaratan Usulan
+                </label>
+                <input 
+                  type="url" 
+                  placeholder="https://drive.google.com/drive/folders/..." 
+                  value={formData.documentFolderUrl} 
+                  onChange={e => setFormData({...formData, documentFolderUrl: e.target.value})} 
+                  className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                />
+                <p className="text-xs text-slate-500 mt-1">Tempel tautan folder Google Drive yang berisi proposal dan dokumen persyaratan lengkap untuk diakses admin.</p>
+              </div>
             </div>
 
             <div className="pt-4 border-t border-slate-100">
@@ -434,15 +470,31 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               <div key={proposal.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">
                       <Calendar className="w-3.5 h-3.5" />
                       {new Date(proposal.submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       <span className="text-slate-300">&bull;</span>
                       <span className="text-slate-500">Tahun Usulan: {proposal.tahunUsulan || 'N/A'}</span>
                       <span className="text-slate-300">&bull;</span>
                       <span className="text-slate-500">Oleh {proposal.submittedBy}</span>
+                      <span className="ml-auto">{renderStatusBadge(proposal.status)}</span>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-1">{proposal.projectName}</h3>
+
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="text-xl font-bold text-slate-800">{proposal.projectName}</h3>
+                      {proposal.documentFolderUrl && (
+                        <a
+                          href={proposal.documentFolderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all"
+                          title="Buka Folder / Dokumen Usulan"
+                        >
+                          <Folder className="w-4 h-4 text-indigo-600" /> Buka Folder Dokumen
+                        </a>
+                      )}
+                    </div>
+
                     {(proposal.programName || proposal.activityName) && (
                       <p className="text-sm font-semibold text-slate-600 mb-2">
                         {proposal.programName && `Program: ${proposal.programName}`}
@@ -452,7 +504,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                     )}
                     <p className="text-sm text-slate-600 mb-4">{proposal.justification}</p>
                     
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 mb-4">
                       <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 font-medium">
                         <MapPin className="w-4 h-4 text-slate-400" />
                         {proposal.location}
@@ -470,6 +522,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                         {reqsMetCount} / {totalReqs} Syarat Lengkap
                       </div>
                     </div>
+
+                    {/* Admin Notes Display */}
+                    {proposal.adminNotes && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1">
+                        <div className="font-bold flex items-center gap-1.5 text-blue-800">
+                          <Info className="w-4 h-4" /> Catatan Admin / Evaluasi:
+                        </div>
+                        <p className="italic text-blue-900/90 pl-5">"{proposal.adminNotes}"</p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex-shrink-0 flex flex-col justify-center min-w-[200px]">

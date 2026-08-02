@@ -20,6 +20,9 @@ export interface Proposal {
   estimatedBudget: number;
   justification: string;
   zoomLink?: string;
+  documentFolderUrl?: string;
+  status?: 'pending' | 'diterima' | 'belum_lengkap' | 'revisi' | 'ditolak';
+  adminNotes?: string;
   requirementsMet: Record<string, boolean>;
   submittedBy: string;
   submittedAt: string;

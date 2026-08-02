@@ -36,6 +36,9 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
           values: [
             { userEnteredValue: { stringValue: 'ID' } },
             { userEnteredValue: { stringValue: 'Timestamp' } },
+            { userEnteredValue: { stringValue: 'Tahun Usulan' } },
+            { userEnteredValue: { stringValue: 'Program Name' } },
+            { userEnteredValue: { stringValue: 'Activity Name' } },
             { userEnteredValue: { stringValue: 'Project Name' } },
             { userEnteredValue: { stringValue: 'Location' } },
             { userEnteredValue: { stringValue: 'Estimated Budget' } },
@@ -43,6 +46,9 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
             { userEnteredValue: { stringValue: 'Zoom Link' } },
             { userEnteredValue: { stringValue: 'Requirements Met' } },
             { userEnteredValue: { stringValue: 'Submitter' } },
+            { userEnteredValue: { stringValue: 'Document Folder URL' } },
+            { userEnteredValue: { stringValue: 'Status' } },
+            { userEnteredValue: { stringValue: 'Admin Notes' } },
           ]
         }],
         fields: 'userEnteredValue'
