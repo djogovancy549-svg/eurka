@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getRows, appendRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
@@ -21,6 +21,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasNewData, setHasNewData] = useState(false);
+  const proposalsRef = useRef<Proposal[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   
@@ -126,6 +129,50 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       fetchProposals(config?.sheetId);
     }
   }, [selectedBidangId, configs]);
+
+  useEffect(() => {
+    proposalsRef.current = proposals;
+  }, [proposals]);
+
+  useEffect(() => {
+    if (!selectedConfig?.sheetId) return;
+
+    const checkNewData = async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const rows = await getRows(token, selectedConfig.sheetId, 'Proposals!A2:B');
+        if (rows && rows.length > 0) {
+          const isLengthChanged = rows.length !== proposalsRef.current.length;
+          const lastRowId = rows[rows.length - 1]?.[0];
+          const currentFirstId = proposalsRef.current[0]?.id;
+          if (isLengthChanged || (lastRowId && currentFirstId && lastRowId !== currentFirstId)) {
+            if (proposalsRef.current.length > 0) {
+              setHasNewData(true);
+            }
+          }
+        }
+      } catch (err) {
+        // silent fail on background check
+      }
+    };
+
+    const interval = setInterval(checkNewData, 10000);
+    return () => clearInterval(interval);
+  }, [selectedConfig?.sheetId]);
+
+  const handleRefreshData = async () => {
+    if (!selectedConfig?.sheetId) return;
+    setIsRefreshing(true);
+    setHasNewData(false);
+    try {
+      await fetchProposals(selectedConfig.sheetId);
+      setSuccessMsg('Data tabel berhasil disegarkan tanpa login ulang!');
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleSaveConfig = async () => {
     if (!selectedConfig) return;
@@ -313,6 +360,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           )}
 
           <button
+            onClick={handleRefreshData}
+            disabled={isRefreshing}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-blue-200 shadow-sm"
+            title="Segarkan data tabel langsung tanpa perlu login ulang atau reload browser"
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Memperbarui...' : 'Segarkan Data'}</span>
+          </button>
+
+          <button
             onClick={() => setShowForm(!showForm)}
             disabled={!selectedConfig?.sheetId}
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -321,6 +378,24 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           </button>
         </div>
       </header>
+
+      {hasNewData && (
+        <div className="mb-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse border-2 border-blue-400">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg shrink-0">🔔</div>
+            <div>
+              <p className="font-extrabold text-sm sm:text-base">Ada data baru masuk atau pembaruan pada usulan!</p>
+              <p className="text-xs text-blue-100">Klik tombol segarkan di kanan untuk memperbarui tampilan tabel langsung tanpa reload browser & login ulang.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleRefreshData}
+            className="bg-white text-blue-700 hover:bg-blue-50 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 shrink-0"
+          >
+            <RefreshCw className="w-4 h-4" /> Segarkan Data Sekarang
+          </button>
+        </div>
+      )}
 
       {successMsg && (
         <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200 flex items-center justify-between">
