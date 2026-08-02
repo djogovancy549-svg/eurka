@@ -22,7 +22,7 @@ export const getAdminRequirements = async (): Promise<Requirement[]> => {
 
   try {
     const docRef = doc(db, 'appConfig', 'settings');
-    const docSnap = await withTimeout(getDoc(docRef), 2000, null as any);
+    const docSnap = await withTimeout(getDoc(docRef), 8000, null as any);
     if (docSnap && docSnap.exists() && docSnap.data().requirements) {
       const reqs = docSnap.data().requirements as Requirement[];
       localStorage.setItem('cached_admin_requirements', JSON.stringify(reqs));
@@ -42,7 +42,7 @@ export const saveAdminRequirements = async (requirements: Requirement[]) => {
 
   try {
     const docRef = doc(db, 'appConfig', 'settings');
-    await withTimeout(setDoc(docRef, { requirements }, { merge: true }), 3000, undefined);
+    await withTimeout(setDoc(docRef, { requirements }, { merge: true }), 8000, undefined);
   } catch (e) {
     console.warn('Saved requirements locally, Firestore sync delayed:', e);
   }
@@ -61,13 +61,14 @@ export const getAllBidangConfigs = async (): Promise<BidangConfig[]> => {
   try {
     const querySnapshot = await withTimeout(
       getDocs(collection(db, 'bidangConfigs')),
-      2000,
+      8000,
       null as any
     );
     if (querySnapshot) {
       querySnapshot.forEach((doc) => {
         configs.push(doc.data() as BidangConfig);
       });
+      localStorage.setItem('cached_bidang_configs', JSON.stringify(configs));
     }
   } catch (e) {
     console.warn('Using cached bidang configs due to slow connection or error:', e);
@@ -112,7 +113,7 @@ export const saveBidangConfig = async (config: BidangConfig) => {
 
   try {
     const docRef = doc(db, 'bidangConfigs', config.id);
-    await withTimeout(setDoc(docRef, config), 3000, undefined);
+    await withTimeout(setDoc(docRef, config), 8000, undefined);
   } catch (e) {
     console.warn('Saved config locally, Firestore sync delayed:', e);
   }
@@ -130,7 +131,7 @@ export const getBidangConfig = async (id: string): Promise<BidangConfig | null> 
 
   try {
     const docRef = doc(db, 'bidangConfigs', id);
-    const docSnap = await withTimeout(getDoc(docRef), 2000, null as any);
+    const docSnap = await withTimeout(getDoc(docRef), 8000, null as any);
     if (docSnap && docSnap.exists()) {
       return docSnap.data() as BidangConfig;
     }
