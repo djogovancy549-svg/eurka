@@ -203,42 +203,52 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
   const handleSaveConfig = async () => {
     if (!selectedConfig) return;
+    
+    // Prepare data
+    const match = tempSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    const extractedSheetId = match ? match[1] : tempSheetId.trim();
+
+    const updated = { 
+      ...selectedConfig, 
+      sheetId: extractedSheetId, 
+      folderUrl: tempFolderUrl,
+      pagu: tempPagu,
+      budgetRules: tempBudgetRules,
+      customRequirements: tempCustomReqs
+    };
+
+    // 1. Save to Firestore (Critical)
     try {
-      // Extract sheet ID if user pasted full URL
-      const match = tempSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-      const extractedSheetId = match ? match[1] : tempSheetId.trim();
-
-      const updated = { 
-        ...selectedConfig, 
-        sheetId: extractedSheetId, 
-        folderUrl: tempFolderUrl,
-        pagu: tempPagu,
-        budgetRules: tempBudgetRules,
-        customRequirements: tempCustomReqs
-      };
-      await saveBidangConfig(updated);
-      setConfigs(configs.map(c => c.id === updated.id ? updated : c));
-      setSelectedConfig(updated);
-      setEditingConfig(false);
-      fetchProposals(updated.sheetId);
-      
-      // Update spreadsheet with Pagu Indikatif so it's visible there too
-      try {
-        const token = await getAccessToken();
-        if (token && updated.sheetId) {
-          await updateCell(token, updated.sheetId, 'Proposals!R1', 'PAGU INDIKATIF');
-          await updateCell(token, updated.sheetId, 'Proposals!R2', updated.pagu.toString());
-        }
-      } catch (e) {
-        console.warn('Failed to write pagu to sheet:', e);
-      }
-
-      setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
-      setTimeout(() => setSuccessMsg(null), 3000);
+       await saveBidangConfig(updated);
+       setConfigs(configs.map(c => c.id === updated.id ? updated : c));
+       setSelectedConfig(updated);
+       setEditingConfig(false);
     } catch (err: any) {
-      alert(`Gagal menyimpan konfigurasi bidang: ${err.message || err}`);
-      console.error(err);
+       console.error('CRITICAL: Save config failed:', err);
+       alert(`Gagal menyimpan konfigurasi bidang ke database: ${err.message || err}`);
+       return;
     }
+
+    // 2. Refresh proposals (Non-critical)
+    try {
+       await fetchProposals(updated.sheetId);
+    } catch (err) {
+       console.warn('Failed to refresh proposals:', err);
+    }
+
+    // 3. Update Sheet (Non-critical)
+    try {
+       const token = await getAccessToken();
+       if (token && updated.sheetId) {
+         await updateCell(token, updated.sheetId, 'Proposals!R1', 'PAGU INDIKATIF');
+         await updateCell(token, updated.sheetId, 'Proposals!R2', updated.pagu.toString());
+       }
+    } catch (err) {
+       console.warn('Failed to update sheet:', err);
+    }
+
+    setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
+    setTimeout(() => setSuccessMsg(null), 3000);
   };
 
   const fetchProposals = async (sheetId?: string) => {
