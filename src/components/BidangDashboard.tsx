@@ -4,6 +4,7 @@ import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
+import { parseMoney, formatRupiah } from '../utils';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -182,7 +183,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           activityName: r[4],
           projectName: r[5],
           location: r[6],
-          estimatedBudget: parseFloat(r[7]) || 0,
+          estimatedBudget: parseMoney(r[7]),
           justification: r[8],
           zoomLink: r[9],
           requirementsMet: reqs,
@@ -210,6 +211,21 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       return;
     }
 
+    const numericBudget = parseMoney(formData.estimatedBudget);
+    if (selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 && selectedConfig.pagu > 0) {
+      const rule = selectedConfig.budgetRules.find(r => 
+        r.programName.toLowerCase().trim() === formData.programName.toLowerCase().trim()
+      );
+      if (rule) {
+        const maxAllowed = (selectedConfig.pagu * rule.maxPercentage) / 100;
+        if (numericBudget > maxAllowed) {
+          alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) melebihi batasan maksimal untuk program "${rule.programName}" (${rule.maxPercentage}% dari Pagu = ${formatRupiah(maxAllowed)}) yang ditentukan oleh Admin.`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    }
+
     try {
       setIsSubmitting(true);
       const token = await getAccessToken();
@@ -226,7 +242,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         formData.activityName,
         formData.projectName,
         formData.location,
-        formData.estimatedBudget,
+        numericBudget,
         formData.justification,
         formData.zoomLink,
         JSON.stringify(formData.reqs),
@@ -445,8 +461,22 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700">Estimasi Anggaran (Rp) *</label>
-                <input required type="number" min="0" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                <input required type="text" placeholder="Contoh: 50000000" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                <p className="text-xs text-slate-500 mt-1">Masukkan nominal angka (misal: 35000000 atau 50.000.000)</p>
               </div>
+
+              {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                  <p className="font-bold mb-1">Informasi Batasan Anggaran Program dari Admin:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {selectedConfig.budgetRules.map((rule, idx) => (
+                      <li key={idx}>
+                        <strong>{rule.programName}</strong>: Maksimal {rule.maxPercentage}% dari Pagu (Pagu: {formatRupiah(selectedConfig.pagu)} → Maks: {formatRupiah((selectedConfig.pagu * rule.maxPercentage) / 100)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="md:col-span-2 space-y-1">
                 <label className="text-sm font-medium text-slate-700">Justifikasi / Urgensi *</label>
                 <textarea required rows={3} value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />

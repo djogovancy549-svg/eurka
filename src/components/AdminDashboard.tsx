@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
-import { Proposal, BidangConfig } from '../types';
+import { Proposal, BidangConfig, BudgetRule } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
+import { parseMoney, formatRupiah } from '../utils';
 import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -24,6 +25,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [tempSheetId, setTempSheetId] = useState('');
   const [tempFolderUrl, setTempFolderUrl] = useState('');
   const [tempPagu, setTempPagu] = useState<number>(0);
+  const [tempBudgetRules, setTempBudgetRules] = useState<BudgetRule[]>([]);
+  const [newRuleProgram, setNewRuleProgram] = useState('');
+  const [newRulePct, setNewRulePct] = useState<number>(35);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [editingZoomId, setEditingZoomId] = useState<string | null>(null);
@@ -133,6 +137,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         setTempSheetId(config.sheetId || '');
         setTempFolderUrl(config.folderUrl || '');
         setTempPagu(config.pagu || 0);
+        setTempBudgetRules(config.budgetRules || []);
       }
       setEditingConfig(false);
       fetchProposals(config?.sheetId);
@@ -150,7 +155,8 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         ...selectedConfig, 
         sheetId: extractedSheetId, 
         folderUrl: tempFolderUrl,
-        pagu: tempPagu
+        pagu: tempPagu,
+        budgetRules: tempBudgetRules
       };
       await saveBidangConfig(updated);
       setConfigs(configs.map(c => c.id === updated.id ? updated : c));
@@ -192,7 +198,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           activityName: r[4],
           projectName: r[5],
           location: r[6],
-          estimatedBudget: parseFloat(r[7]) || 0,
+          estimatedBudget: parseMoney(r[7]),
           justification: r[8],
           zoomLink: r[9],
           requirementsMet: reqs,
@@ -306,7 +312,67 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
               />
             </div>
           </div>
-          <div className="flex justify-end gap-2">
+
+          <div className="mt-4 pt-4 border-t border-amber-200">
+            <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">
+              Aturan Batasan Anggaran Program (Contoh: Belanja ATK max 35% dari Pagu)
+            </label>
+            <div className="flex gap-2 mb-3">
+              <input 
+                type="text"
+                placeholder="Nama Program / Kegiatan (mis: Belanja ATK)"
+                value={newRuleProgram}
+                onChange={e => setNewRuleProgram(e.target.value)}
+                className="flex-1 border border-amber-300 bg-white rounded-lg px-3 py-2 text-xs outline-none"
+              />
+              <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-lg px-3 py-2">
+                <input 
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={newRulePct}
+                  onChange={e => setNewRulePct(Number(e.target.value))}
+                  className="w-12 text-xs outline-none font-bold text-center"
+                />
+                <span className="text-xs text-slate-500">% dari Pagu</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newRuleProgram.trim()) return;
+                  setTempBudgetRules([...tempBudgetRules, { programName: newRuleProgram.trim(), maxPercentage: newRulePct }]);
+                  setNewRuleProgram('');
+                  setNewRulePct(35);
+                }}
+                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-xs font-bold"
+              >
+                Tambah Aturan
+              </button>
+            </div>
+            {tempBudgetRules.length > 0 ? (
+              <div className="space-y-2">
+                {tempBudgetRules.map((rule, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white/80 border border-amber-200 rounded-xl px-3 py-2 text-xs">
+                    <span className="font-bold text-slate-800">{rule.programName}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full font-bold">Maks {rule.maxPercentage}% dari Pagu</span>
+                      <button
+                        type="button"
+                        onClick={() => setTempBudgetRules(tempBudgetRules.filter((_, i) => i !== idx))}
+                        className="text-red-500 hover:text-red-700 font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-amber-700 italic">Belum ada aturan batasan anggaran program yang ditambahkan.</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
             {selectedConfig.sheetId && (
               <button onClick={() => setEditingConfig(false)} className="px-4 py-2 text-amber-800 font-medium text-sm hover:bg-amber-100 rounded-lg">
                 Tutup
@@ -331,16 +397,16 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-yellow-400">
           <p className="text-slate-500 text-xs font-bold uppercase mb-1">Total Anggaran Diusulkan</p>
           <div className="flex items-end justify-between">
-            <span className="text-2xl font-black text-slate-800">
-              Rp {(totalBudget / 1000000000).toFixed(2)}M
+            <span className="text-lg font-black text-slate-800">
+              {formatRupiah(totalBudget)}
             </span>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-purple-500">
           <p className="text-slate-500 text-xs font-bold uppercase mb-1">Pagu Indikatif (Batas)</p>
           <div className="flex items-end justify-between">
-            <span className="text-2xl font-black text-slate-800">
-              Rp {((selectedConfig?.pagu || 0) / 1000000000).toFixed(2)}M
+            <span className="text-lg font-black text-slate-800">
+              {formatRupiah(selectedConfig?.pagu || 0)}
             </span>
             <span className={`text-xs font-bold ${totalBudget > (selectedConfig?.pagu || 0) ? 'text-red-500' : 'text-green-500'}`}>
               {totalBudget > (selectedConfig?.pagu || 0) ? 'Over Budget' : 'Aman'}
