@@ -153,6 +153,17 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             }
           }
         }
+        
+        // Also silently check if config (Pagu/Rules) changed
+        const latestConfigs = await getAllBidangConfigs();
+        const currentSelectedId = selectedConfig?.id;
+        if (currentSelectedId) {
+          const latestSelected = latestConfigs.find(c => c.id === currentSelectedId);
+          if (latestSelected && latestSelected.pagu !== selectedConfig?.pagu) {
+             setConfigs(latestConfigs);
+             setSelectedConfig(latestSelected);
+          }
+        }
       } catch (err) {
         // silent fail on background check
       }
@@ -160,15 +171,22 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
     const interval = setInterval(checkNewData, 10000);
     return () => clearInterval(interval);
-  }, [selectedConfig?.sheetId]);
+  }, [selectedConfig?.sheetId, selectedConfig?.id, selectedConfig?.pagu]);
 
   const handleRefreshData = async () => {
-    if (!selectedConfig?.sheetId) return;
     setIsRefreshing(true);
     setHasNewData(false);
     try {
-      await fetchProposals(selectedConfig.sheetId);
-      setSuccessMsg('Data tabel berhasil disegarkan tanpa login ulang!');
+      const data = await getAllBidangConfigs();
+      setConfigs(data);
+      if (selectedBidangId) {
+         const updatedConfig = data.find(c => c.id === selectedBidangId);
+         if (updatedConfig) setSelectedConfig(updatedConfig);
+      }
+      if (selectedConfig?.sheetId) {
+        await fetchProposals(selectedConfig.sheetId);
+      }
+      setSuccessMsg('Data tabel dan pagu berhasil disegarkan!');
       setTimeout(() => setSuccessMsg(null), 3500);
     } finally {
       setIsRefreshing(false);
@@ -510,16 +528,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-yellow-400">
           <p className="text-slate-500 text-xs font-bold uppercase mb-1">Total Anggaran Diusulkan</p>
           <div className="flex items-end justify-between">
-            <span className="text-2xl font-black text-slate-800">
-              Rp {(totalBudget / 1000000000).toFixed(2)}M
+            <span className="text-xl sm:text-2xl font-black text-slate-800">
+              {formatRupiah(totalBudget)}
             </span>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-purple-500">
           <p className="text-slate-500 text-xs font-bold uppercase mb-1">Pagu Indikatif (Batas)</p>
           <div className="flex items-end justify-between">
-            <span className="text-2xl font-black text-slate-800">
-              Rp {((selectedConfig?.pagu || 0) / 1000000000).toFixed(2)}M
+            <span className="text-xl sm:text-2xl font-black text-slate-800">
+              {formatRupiah(selectedConfig?.pagu || 0)}
             </span>
             <span className={`text-xs font-bold ${totalBudget > (selectedConfig?.pagu || 0) ? 'text-red-500' : 'text-green-500'}`}>
               {totalBudget > (selectedConfig?.pagu || 0) ? 'Over Budget' : 'Aman'}
