@@ -167,6 +167,14 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           >
             <Settings className="w-4 h-4" /> Pengaturan Bidang
           </button>
+          <button
+            onClick={() => window.open('https://meet.google.com/new', '_blank')}
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-emerald-200 shadow-sm"
+            title="Buka Google Meet untuk Diskusi & Berbagi Layar"
+          >
+            <Video className="w-5 h-5 text-emerald-600" /> Buka Google Meet
+          </button>
+
           {selectedConfig?.folderUrl && (
             <a 
               href={selectedConfig.folderUrl}

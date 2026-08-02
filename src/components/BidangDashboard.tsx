@@ -203,12 +203,21 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             ))}
           </select>
 
+          <button
+            onClick={() => window.open('https://meet.google.com/new', '_blank')}
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-emerald-200 shadow-sm"
+            title="Buka Google Meet untuk Diskusi & Berbagi Layar"
+          >
+            <Video className="w-5 h-5 text-emerald-600" /> Buka Google Meet
+          </button>
+
           {selectedConfig?.folderUrl && (
             <a 
               href={selectedConfig.folderUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-indigo-100"
+              title="Unggah berkas persyaratan ke Google Drive Bidang"
             >
               <ExternalLink className="w-5 h-5" /> Upload Dokumen
             </a>
@@ -230,6 +239,30 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700">✕</button>
         </div>
       )}
+
+      {/* Info Banner on File Upload & Google Meet */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-6 text-blue-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <Info className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
+          <div className="text-sm space-y-1">
+            <p className="font-bold">Informasi Penyimpanan Berkas & Google Meet</p>
+            <p className="text-blue-700">
+              📁 Berkas persyaratan diunggah langsung ke <b>Google Drive Folder</b> masing-masing bidang (klik tombol <b>Upload Dokumen</b> di atas). 
+              🎥 Gunakan tombol <b>Buka Google Meet</b> untuk memulai rapat video instan dan berbagi layar saat diskusi usulan.
+            </p>
+          </div>
+        </div>
+        {selectedConfig?.folderUrl && (
+          <a
+            href={selectedConfig.folderUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+          >
+            <ExternalLink className="w-4 h-4" /> Buka Folder Drive
+          </a>
+        )}
+      </div>
 
       {/* Config Form if missing or editing */}
       {selectedConfig && (!selectedConfig.sheetId || editingConfig) && (
