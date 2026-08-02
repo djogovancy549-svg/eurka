@@ -94,7 +94,8 @@ export default function Settings() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 border-b-4 border-b-blue-500">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Pengaturan Bidang</h3>
+        <h3 className="text-lg font-semibold text-slate-900 mb-1">Pengaturan Bidang & Unit Usulan (Kewilayahan & POKIR)</h3>
+        <p className="text-sm text-slate-500 mb-4">Atur Pagu, Spreadsheet ID, Drive URL, dan aturan anggaran untuk Bidang (SDA, BM, PL, dsb) serta Kecamatan, Desa, Lurah, dan POKIR DPRD.</p>
         
         {loadingConfigs ? (
           <div className="py-8 flex justify-center text-slate-500"><Loader2 className="w-6 h-6 animate-spin" /></div>

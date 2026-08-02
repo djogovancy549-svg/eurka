@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getRows, appendRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
-import { Proposal, BidangConfig, BIDANG_LIST } from '../types';
+import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
-import { parseMoney, formatRupiah } from '../utils';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
+import { parseMoney, formatRupiah, printRekapanDisetujui } from '../utils';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -18,6 +18,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>(localStorage.getItem('urk_selected_bidang') || '');
   const [selectedConfig, setSelectedConfig] = useState<BidangConfig | null>(null);
+  const activeRequirements = getUnitActiveRequirements(selectedConfig, requirements);
   
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -333,9 +334,11 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             onChange={e => handleBidangSelect(e.target.value)}
             className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="" disabled>Pilih Bidang Anda</option>
+            <option value="" disabled>Pilih Bidang / Unit</option>
             {configs.map(c => (
-              <option key={c.id} value={c.id}>Bidang {c.name}</option>
+              <option key={c.id} value={c.id}>
+                {NON_BIDANG_UNITS.includes(c.id) ? `Usulan ${c.name}` : `Bidang ${c.name}`}
+              </option>
             ))}
           </select>
 
@@ -358,6 +361,24 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               <ExternalLink className="w-5 h-5" /> Upload Dokumen
             </a>
           )}
+
+          <button
+            onClick={() => {
+              if (!selectedConfig) return;
+              printRekapanDisetujui(
+                selectedConfig.name,
+                NON_BIDANG_UNITS.includes(selectedConfig.id),
+                proposals,
+                selectedConfig.pagu || 0
+              );
+            }}
+            disabled={!selectedConfig || proposals.filter(p => p.status === 'diterima').length === 0}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Cetak Rekapitulasi Usulan yang Disetujui (Format PDF/Cetak)"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Cetak Rekap Disetujui ({proposals.filter(p => p.status === 'diterima').length})</span>
+          </button>
 
           <button
             onClick={handleRefreshData}
@@ -609,9 +630,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             </div>
 
             <div className="pt-4 border-t border-slate-100">
-              <h4 className="font-medium text-slate-900 mb-4">Syarat & Dokumen Pendukung (Standar Admin)</h4>
+              <h4 className="font-medium text-slate-900 mb-4">Syarat & Dokumen Pendukung ({selectedConfig ? selectedConfig.name : 'Standar Admin'})</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {requirements.map((req) => (
+                {activeRequirements.map((req) => (
                   <label key={req.id} className="flex items-start gap-3 p-4 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
                     <div className="flex-shrink-0 mt-0.5">
                       <input type="checkbox" checked={formData.reqs[req.id] || false} onChange={() => toggleReq(req.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500" />
@@ -656,7 +677,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         ) : (
           proposals.map((proposal) => {
             const reqsMetCount = Object.values(proposal.requirementsMet || {}).filter(Boolean).length;
-            const totalReqs = requirements.length;
+            const totalReqs = activeRequirements.length;
             
             return (
               <div key={proposal.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">

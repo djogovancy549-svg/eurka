@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
-import { Proposal, BidangConfig, BudgetRule } from '../types';
+import { Proposal, BidangConfig, BudgetRule, Requirement, NON_BIDANG_UNITS, defaultNonBidangRequirements, getUnitActiveRequirements } from '../types';
 import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
-import { parseMoney, formatRupiah } from '../utils';
-import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
+import { parseMoney, formatRupiah, printRekapanDisetujui } from '../utils';
+import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Plus, Trash2 } from 'lucide-react';
 
 interface AdminDashboardProps {
   userEmail: string;
@@ -31,6 +31,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [tempBudgetRules, setTempBudgetRules] = useState<BudgetRule[]>([]);
   const [newRuleProgram, setNewRuleProgram] = useState('');
   const [newRulePct, setNewRulePct] = useState<number>(35);
+  const [tempCustomReqs, setTempCustomReqs] = useState<Requirement[]>([]);
+  const [newReqLabel, setNewReqLabel] = useState('');
+  const [newReqDesc, setNewReqDesc] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [editingZoomId, setEditingZoomId] = useState<string | null>(null);
@@ -141,6 +144,13 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         setTempFolderUrl(config.folderUrl || '');
         setTempPagu(config.pagu || 0);
         setTempBudgetRules(config.budgetRules || []);
+        if (config.customRequirements && config.customRequirements.length > 0) {
+          setTempCustomReqs(config.customRequirements);
+        } else if (NON_BIDANG_UNITS.includes(config.id) && defaultNonBidangRequirements[config.id]) {
+          setTempCustomReqs(defaultNonBidangRequirements[config.id]);
+        } else {
+          setTempCustomReqs([]);
+        }
       }
       setEditingConfig(false);
       fetchProposals(config?.sheetId);
@@ -203,7 +213,8 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         sheetId: extractedSheetId, 
         folderUrl: tempFolderUrl,
         pagu: tempPagu,
-        budgetRules: tempBudgetRules
+        budgetRules: tempBudgetRules,
+        customRequirements: tempCustomReqs
       };
       await saveBidangConfig(updated);
       setConfigs(configs.map(c => c.id === updated.id ? updated : c));
@@ -282,7 +293,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
             className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
           >
             {configs.map(c => (
-              <option key={c.id} value={c.id}>Rekap Bidang {c.name}</option>
+              <option key={c.id} value={c.id}>
+                {NON_BIDANG_UNITS.includes(c.id) ? `Rekap Usulan ${c.name}` : `Rekap Bidang ${c.name}`}
+              </option>
             ))}
           </select>
           <button
@@ -299,6 +312,23 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           >
             <RefreshCw className={`w-4 h-4 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Memperbarui...' : 'Segarkan Data'}</span>
+          </button>
+          <button
+            onClick={() => {
+              if (!selectedConfig) return;
+              printRekapanDisetujui(
+                selectedConfig.name,
+                NON_BIDANG_UNITS.includes(selectedConfig.id),
+                proposals,
+                selectedConfig.pagu || 0
+              );
+            }}
+            disabled={!selectedConfig || proposals.filter(p => p.status === 'diterima').length === 0}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Cetak Rekapitulasi Usulan yang Disetujui per Bidang / Kecamatan / Desa / Lurah / POKIR"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Cetak Rekap Disetujui ({proposals.filter(p => p.status === 'diterima').length})</span>
           </button>
           <button
             onClick={() => window.open('https://meet.google.com/new', '_blank')}
@@ -446,6 +476,85 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
             )}
           </div>
 
+          <div className="mt-4 pt-4 border-t border-amber-200">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
+                Persyaratan Khusus Verifikasi Usulan ({selectedConfig.name})
+              </label>
+              {NON_BIDANG_UNITS.includes(selectedConfig.id) ? (
+                <button
+                  type="button"
+                  onClick={() => setTempCustomReqs(defaultNonBidangRequirements[selectedConfig.id] || [])}
+                  className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg font-bold"
+                >
+                  Reset ke Persyaratan Standar {selectedConfig.name}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTempCustomReqs([])}
+                  className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg font-bold"
+                >
+                  Gunakan Syarat Standar Global BAPPENAS
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Nama Persyaratan (mis: Berita Acara Musrenbang / Dokumen Pokir)"
+                value={newReqLabel}
+                onChange={e => setNewReqLabel(e.target.value)}
+                className="w-1/3 border border-amber-300 bg-white rounded-lg px-3 py-2 text-xs outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Deskripsi singkat persyaratan..."
+                value={newReqDesc}
+                onChange={e => setNewReqDesc(e.target.value)}
+                className="flex-1 border border-amber-300 bg-white rounded-lg px-3 py-2 text-xs outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newReqLabel.trim()) return;
+                  setTempCustomReqs([
+                    ...tempCustomReqs,
+                    { id: `req_custom_${Date.now()}`, label: newReqLabel.trim(), description: newReqDesc.trim() }
+                  ]);
+                  setNewReqLabel('');
+                  setNewReqDesc('');
+                }}
+                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-xs font-bold shrink-0"
+              >
+                + Tambah Syarat
+              </button>
+            </div>
+            {tempCustomReqs.length > 0 ? (
+              <div className="space-y-1.5">
+                {tempCustomReqs.map((req, idx) => (
+                  <div key={idx} className="flex items-start justify-between bg-white/80 border border-amber-200 rounded-xl px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-bold text-slate-800">{req.label}</p>
+                      <p className="text-slate-500 text-[11px]">{req.description || 'Tidak ada deskripsi'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTempCustomReqs(tempCustomReqs.filter((_, i) => i !== idx))}
+                      className="text-red-500 hover:text-red-700 font-bold ml-2 p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-amber-700 italic">
+                Menggunakan persyaratan standar global. Tambahkan di atas untuk membuat syarat khusus bagi unit ini.
+              </p>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 mt-4">
             {selectedConfig.sheetId && (
               <button onClick={() => setEditingConfig(false)} className="px-4 py-2 text-amber-800 font-medium text-sm hover:bg-amber-100 rounded-lg">
@@ -508,8 +617,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           </div>
         ) : (
           proposals.map((proposal) => {
+            const activeReqs = getUnitActiveRequirements(selectedConfig, requirements);
             const reqsMetCount = Object.values(proposal.requirementsMet || {}).filter(Boolean).length;
-            const totalReqs = requirements.length;
+            const totalReqs = activeReqs.length;
             
             return (
               <div key={proposal.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
