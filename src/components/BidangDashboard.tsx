@@ -234,7 +234,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:P');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:Q');
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
@@ -332,7 +332,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         formData.jenisUsulan
       ];
 
-      await appendRow(token, configToUse.sheetId, 'Proposals!A:P', rowData);
+      await appendRow(token, configToUse.sheetId, 'Proposals!A:Q', rowData);
       
       // Notify Admin
       await notifyAdminNewProposal();

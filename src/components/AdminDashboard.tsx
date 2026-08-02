@@ -285,7 +285,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:P');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:Q');
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
@@ -309,7 +309,8 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           documentFolderUrl: r[12] || '',
           status: (r[13] as any) || 'pending',
           adminNotes: r[14] || '',
-          attachments: atts
+          attachments: atts,
+          jenisUsulan: r[16]
         } as Proposal;
       });
       
