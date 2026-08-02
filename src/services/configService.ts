@@ -41,8 +41,21 @@ export const saveAdminRequirements = async (requirements: Requirement[]) => {
   } catch (e) {}
 
   try {
+    const deepClean = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(deepClean).filter(v => v !== undefined);
+      } else if (obj !== null && typeof obj === 'object') {
+        return Object.fromEntries(
+          Object.entries(obj)
+            .map(([k, v]) => [k, deepClean(v)])
+            .filter(([_, v]) => v !== undefined)
+        );
+      }
+      return obj;
+    };
+    
     const docRef = doc(db, 'appConfig', 'settings');
-    await withTimeout(setDoc(docRef, { requirements }, { merge: true }), 8000, undefined);
+    await withTimeout(setDoc(docRef, { requirements: deepClean(requirements) }, { merge: true }), 8000, undefined);
   } catch (e) {
     console.warn('Saved requirements locally, Firestore sync delayed:', e);
   }
@@ -112,10 +125,25 @@ export const saveBidangConfig = async (config: BidangConfig) => {
   } catch (e) {}
 
   try {
+    // Firestore rejects undefined values. Clean them up deeply before saving.
+    const deepClean = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(deepClean).filter(v => v !== undefined);
+      } else if (obj !== null && typeof obj === 'object') {
+        return Object.fromEntries(
+          Object.entries(obj)
+            .map(([k, v]) => [k, deepClean(v)])
+            .filter(([_, v]) => v !== undefined)
+        );
+      }
+      return obj;
+    };
+    const cleanConfig = deepClean(config);
+    
     const docRef = doc(db, 'bidangConfigs', config.id);
-    await withTimeout(setDoc(docRef, config), 8000, undefined);
+    await withTimeout(setDoc(docRef, cleanConfig), 8000, undefined);
   } catch (e) {
-    console.warn('Saved config locally, Firestore sync delayed:', e);
+    console.error('Failed to sync config to Firestore:', e);
   }
 };
 
