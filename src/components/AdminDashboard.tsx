@@ -3,7 +3,7 @@ import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BudgetRule, Requirement, NON_BIDANG_UNITS, defaultNonBidangRequirements, getUnitActiveRequirements } from '../types';
-import { getAllBidangConfigs, saveBidangConfig } from '../services/configService';
+import { getAllBidangConfigs, saveBidangConfig, deleteBidangConfig } from '../services/configService';
 import { parseMoney, formatRupiah, printRekapanDisetujui } from '../utils';
 import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Plus, Trash2 } from 'lucide-react';
 
@@ -332,6 +332,38 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditingConfig(true)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+              title="Edit Konfigurasi"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={async () => {
+                const pin = prompt('Masukkan PIN untuk menghapus konfigurasi ini (urkdpupr):');
+                if (pin === 'urkdpupr') {
+                  if (!selectedBidangId) return;
+                  try {
+                    await deleteBidangConfig(selectedBidangId);
+                    setConfigs(configs.filter(c => c.id !== selectedBidangId));
+                    setSelectedBidangId(configs.length > 1 ? configs.filter(c => c.id !== selectedBidangId)[0].id : '');
+                    alert('Konfigurasi berhasil dihapus.');
+                  } catch (e) {
+                    console.error('Gagal menghapus:', e);
+                    alert('Gagal menghapus konfigurasi.');
+                  }
+                } else if (pin !== null) {
+                  alert('PIN salah!');
+                }
+              }}
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+              title="Hapus Konfigurasi"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
           <button
             onClick={() => setEditingConfig(!editingConfig)}
             className={`px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border ${editingConfig ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}

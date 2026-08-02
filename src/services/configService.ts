@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { Requirement, BidangConfig, BIDANG_LIST } from '../types';
 
 // Helper to prevent slow Firestore connections from hanging the UI
@@ -138,6 +138,26 @@ export const saveBidangConfig = async (config: BidangConfig) => {
     console.log('Successfully wrote to:', docRef.path);
   } catch (e) {
     console.error('Failed to sync config to Firestore:', e);
+    throw e;
+  }
+};
+
+export const deleteBidangConfig = async (configId: string) => {
+  // Update local cache
+  try {
+    const cached = localStorage.getItem('cached_bidang_configs');
+    if (cached) {
+      let list: BidangConfig[] = JSON.parse(cached);
+      list = list.filter(c => c.id !== configId);
+      localStorage.setItem('cached_bidang_configs', JSON.stringify(list));
+    }
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'bidangConfigs', configId);
+    await withTimeout(deleteDoc(docRef), 8000, undefined);
+  } catch (e) {
+    console.error('Failed to delete config from Firestore:', e);
     throw e;
   }
 };
