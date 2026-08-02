@@ -217,16 +217,20 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       customRequirements: tempCustomReqs
     };
 
-    // 1. Save to Firestore (Critical)
+    // Track if any part failed
+    let firestoreFailed = false;
+    let firestoreError = '';
+
+    // 1. Try Save to Firestore
     try {
        await saveBidangConfig(updated);
        setConfigs(configs.map(c => c.id === updated.id ? updated : c));
        setSelectedConfig(updated);
        setEditingConfig(false);
     } catch (err: any) {
-       console.error('CRITICAL: Save config failed:', err);
-       alert(`Gagal menyimpan konfigurasi bidang ke database: ${err.message || err}`);
-       return;
+       console.error('Save to Firestore failed:', err);
+       firestoreFailed = true;
+       firestoreError = err.message || err;
     }
 
     // 2. Refresh proposals (Non-critical)
@@ -247,8 +251,13 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
        console.warn('Failed to update sheet:', err);
     }
 
-    setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
-    setTimeout(() => setSuccessMsg(null), 3000);
+    // Finally, report success/failure
+    if (firestoreFailed) {
+      alert(`Peringatan: Gagal menyimpan konfigurasi ke database: ${firestoreError}. Data mungkin telah tersimpan ke Google Sheet.`);
+    } else {
+      setSuccessMsg('Konfigurasi bidang berhasil disimpan!');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    }
   };
 
   const fetchProposals = async (sheetId?: string) => {
