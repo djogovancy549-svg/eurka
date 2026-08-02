@@ -234,7 +234,7 @@ export const printRekapanDisetujui = (
           <p style="font-size: 9pt; margin-top: 2px;">NIP. ........................................</p>
         </div>
         <div class="sig-block">
-          <p>Mbay, ${dateStr}<br>Tim Verifikator Rencana Kerja / BAPPERIDA</p>
+          <p>Mbay, ${dateStr}<br>Tim Verifikator Rencana Kerja / DPUPR</p>
           <div class="sig-space"></div>
           <p class="sig-name">( ................................................ )</p>
           <p style="font-size: 9pt; margin-top: 2px;">NIP. ........................................</p>

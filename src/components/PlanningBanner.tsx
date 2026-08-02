@@ -59,20 +59,20 @@ const SLIDES: BannerSlide[] = [
     tipsTitle: 'Tips Pengelolaan Pagu Indikatif Bidang & Unit',
     tipsList: [
       'Prioritaskan kegiatan lanjutan yang belum tuntas sebelum membuka usulan proyek fisik baru.',
-      'Perhatikan batasan persentase anggaran per program sesuai aturan pagu yang ditetapkan Admin/Bapperida.',
+      'Perhatikan batasan persentase anggaran per program sesuai aturan pagu yang ditetapkan Admin/DPUPR.',
       'Manfaatkan fitur Cetak Rekapitulasi untuk memonitor sisa selisih pagu secara berkala.'
     ]
   },
   {
     id: 4,
-    badge: 'LAYANAN BAPPERIDA NAGEKEO',
+    badge: 'LAYANAN DPUPR NAGEKEO',
     title: 'Klinik Perencanaan & Konsultasi Verifikasi',
-    subtitle: 'Butuh pendampingan penyusunan Rencana Kerja atau koordinasi antar OPD? Manfaatkan ruang konsultasi daring bersama tim verifikator.',
+    subtitle: 'Butuh pendampingan penyusunan Rencana Kerja atau koordinasi antar Bidang? Manfaatkan ruang konsultasi daring bersama tim verifikator.',
     highlightText: 'Asistensi Cepat',
     accentColor: 'from-purple-600 to-indigo-700',
     bgGradient: 'from-purple-900/90 via-indigo-900/90 to-slate-900',
     icon: <Sparkles className="w-8 h-8 text-purple-300" />,
-    tipsTitle: 'Layanan Asistensi e-URK Bapperida',
+    tipsTitle: 'Layanan Asistensi e-URK DPUPR',
     tipsList: [
       'Gunakan tombol "Google Meet" di header aplikasi untuk rapat koordinasi dadakan bersama verifikator.',
       'Periksa status usulan Anda secara rutin: ikon lonceng biru menandakan pembaruan data real-time.',
@@ -205,7 +205,7 @@ export default function PlanningBanner() {
                   Info RKPD & e-URK
                 </p>
                 <p className="text-xs font-extrabold text-yellow-300">
-                  BAPPERIDA NAGEKEO
+                  DPUPR NAGEKEO
                 </p>
               </div>
             </div>
@@ -264,7 +264,7 @@ export default function PlanningBanner() {
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-3">
                 <Bookmark className="w-5 h-5 text-blue-600 shrink-0" />
                 <p className="text-xs text-blue-800">
-                  <strong>Catatan Bapperida:</strong> Seluruh usulan yang memenuhi syarat administrasi & kelayakan teknis akan diverifikasi sebelum penetapan akhir RKPD.
+                  <strong>Catatan DPUPR:</strong> Seluruh usulan yang memenuhi syarat administrasi & kelayakan teknis akan diverifikasi sebelum penetapan akhir.
                 </p>
               </div>
 
