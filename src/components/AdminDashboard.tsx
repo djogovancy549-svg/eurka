@@ -1,3 +1,4 @@
+import { IndependenceDayBanner } from './IndependenceDayBanner';
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -327,6 +328,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
   return (
     <div className="space-y-6">
+      <IndependenceDayBanner />
       <header className="flex flex-col sm:flex-row sm:items-center justify-between shadow-sm bg-white border-b border-slate-200 -mx-8 -mt-8 px-8 py-5 mb-8">
         <div className="flex flex-col">
           <h2 className="text-xl font-extrabold text-slate-800">Dashboard Evaluasi (Admin)</h2>
