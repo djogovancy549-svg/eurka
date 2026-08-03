@@ -179,17 +179,28 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     setIsRefreshing(true);
     setHasNewData(false);
     try {
-      const data = await getAllBidangConfigs();
-      setConfigs(data);
-      if (selectedBidangId) {
-         const updatedConfig = data.find(c => c.id === selectedBidangId);
-         if (updatedConfig) setSelectedConfig(updatedConfig);
+      let currentSheetId = selectedConfig?.sheetId;
+      try {
+        const data = await getAllBidangConfigs();
+        setConfigs(data);
+        if (selectedBidangId) {
+           const updatedConfig = data.find(c => c.id === selectedBidangId);
+           if (updatedConfig) {
+             setSelectedConfig(updatedConfig);
+             currentSheetId = updatedConfig.sheetId;
+           }
+        }
+      } catch (err) {
+        console.error('Failed to refresh configs', err);
       }
-      if (selectedConfig?.sheetId) {
-        await fetchProposals(selectedConfig.sheetId);
+
+      if (currentSheetId) {
+        await fetchProposals(currentSheetId);
+        setSuccessMsg('Data tabel dan pagu berhasil disegarkan!');
+        setTimeout(() => setSuccessMsg(null), 3500);
+      } else {
+        alert('Tidak dapat memuat data tabel karena ID Google Sheet belum diatur untuk bidang ini.');
       }
-      setSuccessMsg('Data tabel dan pagu berhasil disegarkan!');
-      setTimeout(() => setSuccessMsg(null), 3500);
     } finally {
       setIsRefreshing(false);
     }

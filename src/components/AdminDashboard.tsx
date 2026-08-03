@@ -201,13 +201,31 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   }, [selectedConfig?.sheetId]);
 
   const handleRefreshData = async () => {
-    if (!selectedConfig?.sheetId) return;
     setIsRefreshing(true);
     setHasNewData(false);
     try {
-      await fetchProposals(selectedConfig.sheetId);
-      setSuccessMsg('Data tabel berhasil disegarkan tanpa login ulang!');
-      setTimeout(() => setSuccessMsg(null), 3500);
+      let currentSheetId = selectedConfig?.sheetId;
+      try {
+        const data = await getAllBidangConfigs();
+        setConfigs(data);
+        if (selectedBidangId) {
+           const updatedConfig = data.find(c => c.id === selectedBidangId);
+           if (updatedConfig) {
+             setSelectedConfig(updatedConfig);
+             currentSheetId = updatedConfig.sheetId;
+           }
+        }
+      } catch (err) {
+        console.error('Failed to refresh configs', err);
+      }
+
+      if (currentSheetId) {
+        await fetchProposals(currentSheetId);
+        setSuccessMsg('Data tabel berhasil disegarkan tanpa login ulang!');
+        setTimeout(() => setSuccessMsg(null), 3500);
+      } else {
+        alert('Tidak dapat memuat data tabel karena ID Google Sheet belum diatur untuk bidang ini.');
+      }
     } finally {
       setIsRefreshing(false);
     }
