@@ -17,6 +17,18 @@ export const SUMBER_USULAN_OPTIONS = [
   'Bidang Teknis Internal DPUPR'
 ];
 
+export const SUMBER_DANA_LIST = [
+  'DAU (Dana Alokasi Umum)',
+  'DAU Earmark / Spesifik (PUPR/Kelurahan)',
+  'DAK Fisik (Dana Alokasi Khusus)',
+  'DAK Non-Fisik',
+  'PAD (Pendapatan Asli Daerah)',
+  'DBH (Dana Bagi Hasil)',
+  'BKP (Bantuan Keuangan Provinsi NTT)',
+  'Dana Desa (APBDes / APBN)',
+  'Pinjaman / Hibah / Lainnya'
+];
+
 export type SipdStatus = 'draft' | 'siap_sipd' | 'sudah_sipd' | 'ditolak_sipd';
 
 export interface BudgetRule {
@@ -27,7 +39,8 @@ export interface BudgetRule {
 export interface BidangConfig {
   id: string; // e.g., 'SDA', 'Kecamatan', etc.
   name: string;
-  pagu: number;
+  pagu: number; // Total Pagu Indikatif
+  paguPerSumberDana?: Record<string, number>; // Pemisahan Pagu Indikatif per Sumber Dana (e.g. { "DAU": 5000000000, "DAK Fisik": 10000000000 })
   sheetId: string;
   folderUrl: string;
   budgetRules?: BudgetRule[];
@@ -43,6 +56,7 @@ export interface Proposal {
   tahunUsulan?: string;
   jenisUsulan?: string;
   sumberUsulan?: string;
+  sumberDanaTarget?: string; // Target sumber dana usulan (DAU, DAK Fisik, dll)
   kecamatan?: string;
   desa?: string;
   pengusulPokir?: string[]; // Multiple pengusul for Pokir DPRD

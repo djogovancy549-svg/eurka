@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRequirements } from '../useRequirements';
-import { Save, Plus, Trash2, ExternalLink, Loader2, MapPin, Building2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
-import { Requirement, BidangConfig, BIDANG_LIST } from '../types';
+import { Save, Plus, Trash2, ExternalLink, Loader2, MapPin, Building2, ChevronDown, ChevronUp, RotateCcw, Wallet, Coins, Layers, CheckCircle } from 'lucide-react';
+import { Requirement, BidangConfig, BIDANG_LIST, SUMBER_DANA_LIST } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, getNagekeoWilayah, saveNagekeoWilayah } from '../services/configService';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
+import { formatRupiah } from '../utils';
 
 export default function Settings() {
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
@@ -55,6 +56,61 @@ export default function Settings() {
 
   const handleConfigChange = (id: string, field: keyof BidangConfig, value: any) => {
     setConfigs(configs.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const handleSumberDanaPaguChange = (configId: string, sumberDanaName: string, amount: number) => {
+    setConfigs(configs.map(c => {
+      if (c.id !== configId) return c;
+      const currentMap: Record<string, number> = { ...(c.paguPerSumberDana || {}) };
+      if (amount < 0) {
+        delete currentMap[sumberDanaName];
+      } else {
+        currentMap[sumberDanaName] = amount;
+      }
+      const totalPagu = Object.values(currentMap).reduce((acc: number, curr: number) => acc + (Number(curr) || 0), 0);
+      return {
+        ...c,
+        paguPerSumberDana: currentMap,
+        pagu: totalPagu > 0 ? totalPagu : c.pagu
+      };
+    }));
+  };
+
+  const handleAddSumberDanaToConfig = (configId: string, sumberDanaName: string) => {
+    if (!sumberDanaName) return;
+    setConfigs(configs.map(c => {
+      if (c.id !== configId) return c;
+      const currentMap: Record<string, number> = { ...(c.paguPerSumberDana || {}) };
+      if (currentMap[sumberDanaName] === undefined) {
+        currentMap[sumberDanaName] = 0;
+      }
+      return { ...c, paguPerSumberDana: currentMap };
+    }));
+  };
+
+  const handleRemoveSumberDanaFromConfig = (configId: string, sumberDanaName: string) => {
+    setConfigs(configs.map(c => {
+      if (c.id !== configId) return c;
+      const currentMap: Record<string, number> = { ...(c.paguPerSumberDana || {}) };
+      delete currentMap[sumberDanaName];
+      const totalPagu = Object.values(currentMap).reduce((acc: number, curr: number) => acc + (Number(curr) || 0), 0);
+      return {
+        ...c,
+        paguPerSumberDana: currentMap,
+        pagu: Object.keys(currentMap).length > 0 ? totalPagu : c.pagu
+      };
+    }));
+  };
+
+  const handleApplyPresetSumberDana = (configId: string) => {
+    setConfigs(configs.map(c => {
+      if (c.id !== configId) return c;
+      const currentMap: Record<string, number> = { ...(c.paguPerSumberDana || {}) };
+      if (currentMap['DAU'] === undefined) currentMap['DAU'] = 0;
+      if (currentMap['DAK Fisik'] === undefined) currentMap['DAK Fisik'] = 0;
+      if (currentMap['PAD'] === undefined) currentMap['PAD'] = 0;
+      return { ...c, paguPerSumberDana: currentMap };
+    }));
   };
 
   const handleSaveConfig = async (config: BidangConfig) => {
@@ -363,34 +419,132 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Pagu Indikatif (Rp)</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">Total Pagu Indikatif (Rp)</label>
+                      {config.paguPerSumberDana && Object.keys(config.paguPerSumberDana).length > 0 && (
+                        <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md">
+                          Dihitung Otomatis dari Rincian
+                        </span>
+                      )}
+                    </div>
                     <input 
                       type="number"
                       value={config.pagu}
                       onChange={(e) => handleConfigChange(config.id, 'pagu', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-slate-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-sm font-semibold"
+                      className="w-full border border-slate-300 bg-white rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-800"
                     />
+                    <div className="text-[11px] font-semibold text-slate-500 mt-1">
+                      Terbilang: <span className="text-blue-700 font-bold">{formatRupiah(config.pagu || 0)}</span>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Spreadsheet ID</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Spreadsheet ID</label>
                     <input 
                       type="text"
                       value={config.sheetId}
                       onChange={(e) => handleConfigChange(config.id, 'sheetId', e.target.value)}
-                      className="w-full border border-slate-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-sm font-mono"
+                      className="w-full border border-slate-300 bg-white rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
                       placeholder="ID Google Sheet"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Folder Drive URL (Opsional)</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Folder Drive URL (Opsional)</label>
                     <input 
                       type="text"
                       value={config.folderUrl}
                       onChange={(e) => handleConfigChange(config.id, 'folderUrl', e.target.value)}
-                      className="w-full border border-slate-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-sm"
+                      className="w-full border border-slate-300 bg-white rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="Link folder Google Drive"
                     />
                   </div>
+                </div>
+
+                {/* PEMISAHAN PAGU INDIKATIF BERDASARKAN SUMBER DANA */}
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-emerald-600" />
+                      <h5 className="text-xs font-bold text-slate-800">
+                        Pemisahan Pagu Indikatif Berdasarkan Sumber Dana
+                      </h5>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(!config.paguPerSumberDana || Object.keys(config.paguPerSumberDana).length === 0) && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetSumberDana(config.id)}
+                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          + Pasang Preset Standar (DAU, DAK, PAD)
+                        </button>
+                      )}
+                      <div className="relative inline-block">
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAddSumberDanaToConfig(config.id, e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                          defaultValue=""
+                          className="text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg outline-none cursor-pointer"
+                        >
+                          <option value="" disabled>+ Tambah Sumber Dana</option>
+                          {SUMBER_DANA_LIST.map(sd => (
+                            <option key={sd} value={sd.split(' ')[0]}>{sd}</option>
+                          ))}
+                          <option value="Lainnya">Sumber Dana Lainnya</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {config.paguPerSumberDana && Object.keys(config.paguPerSumberDana).length > 0 ? (
+                    <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                        {Object.entries(config.paguPerSumberDana).map(([sdName, sdAmount]) => (
+                          <div key={sdName} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                {sdName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSumberDanaFromConfig(config.id, sdName)}
+                                className="text-slate-400 hover:text-red-600 text-xs font-bold p-0.5"
+                                title="Hapus sumber dana ini"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                            <input
+                              type="number"
+                              value={(sdAmount as number) || ''}
+                              onChange={(e) => handleSumberDanaPaguChange(config.id, sdName, parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                            <div className="text-[10px] text-slate-500 truncate font-semibold">
+                              {formatRupiah((sdAmount as number) || 0)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total Bar */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2 px-1 text-xs">
+                        <span className="text-slate-500 font-bold">Akumulasi Total Pagu Sumber Dana:</span>
+                        <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                          {formatRupiah(Object.values((config.paguPerSumberDana || {}) as Record<string, number>).reduce((a: number, b: number) => a + (Number(b) || 0), 0))}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400 italic bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center">
+                      Belum ada pemisahan sumber dana untuk unit ini. Klik tombol "+ Pasang Preset Standar" atau pilih "+ Tambah Sumber Dana" untuk membagi pagu indikatif per pos anggaran (DAU, DAK Fisik, PAD, dll).
+                    </div>
+                  )}
                 </div>
                 <div className="mt-4 flex justify-end">
                   <button 

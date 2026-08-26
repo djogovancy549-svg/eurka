@@ -3,7 +3,8 @@ import {
   RenjaProgram, 
   RenjaSubKegiatan, 
   Proposal, 
-  BIDANG_LIST 
+  BIDANG_LIST,
+  SUMBER_DANA_LIST
 } from '../types';
 import { 
   getRenjaMasterData, 
@@ -50,6 +51,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
   const [allProposals, setAllProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBidang, setSelectedBidang] = useState<string>('Semua');
+  const [selectedSumberDana, setSelectedSumberDana] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({});
 
@@ -269,14 +271,35 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     })));
   };
 
-  // Calculations & Statistics
+  // Calculations & Statistics: Pemisahan Sumber Dana & Pagu Indikatif
+  const sumberDanaStats: Record<string, { totalPagu: number; count: number; urkCount: number; urkBudget: number }> = React.useMemo(() => {
+    const map: Record<string, { totalPagu: number; count: number; urkCount: number; urkBudget: number }> = {};
+    renjaData.subKegiatan.forEach(sub => {
+      const sd = sub.sumberDana || 'DAU';
+      if (!map[sd]) map[sd] = { totalPagu: 0, count: 0, urkCount: 0, urkBudget: 0 };
+      map[sd].totalPagu += (Number(sub.paguSubKegiatan) || 0);
+      map[sd].count += 1;
+      
+      const linkedUrks = allProposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
+      map[sd].urkCount += linkedUrks.length;
+      map[sd].urkBudget += linkedUrks.reduce((a, b) => a + (b.renjaPaguAlokasi || b.estimatedBudget || 0), 0);
+    });
+    return map;
+  }, [renjaData.subKegiatan, allProposals]);
+
   const filteredPrograms = renjaData.programs.filter(p => {
     if (selectedBidang !== 'Semua' && p.bidangPengampu !== selectedBidang) return false;
+
+    const progSubs = renjaData.subKegiatan.filter(s => s.programId === p.id);
+    if (selectedSumberDana !== 'Semua') {
+      const hasMatchingSub = progSubs.some(s => (s.sumberDana || 'DAU') === selectedSumberDana);
+      if (!hasMatchingSub) return false;
+    }
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchProg = p.namaProgram.toLowerCase().includes(q) || p.kodeProgram.toLowerCase().includes(q);
-      const subs = renjaData.subKegiatan.filter(s => s.programId === p.id);
-      const matchSub = subs.some(s => s.namaSubKegiatan.toLowerCase().includes(q) || s.kodeSubKegiatan.toLowerCase().includes(q));
+      const matchSub = progSubs.some(s => s.namaSubKegiatan.toLowerCase().includes(q) || s.kodeSubKegiatan.toLowerCase().includes(q));
       return matchProg || matchSub;
     }
     return true;
@@ -405,25 +428,115 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
         </div>
       </div>
 
+      {/* REKAPITULASI & PEMISAHAN PAGU BERDASARKAN SUMBER DANA */}
+      {renjaData.subKegiatan.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm border-l-4 border-l-emerald-500 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Coins className="w-5 h-5 text-emerald-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Pemisahan Pagu Indikatif RENJA Berdasarkan Sumber Dana
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Rincian alokasi anggaran sub-kegiatan dan usulan masyarakat (URK) terakomodasi per pos pendanaan.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-semibold">Total Alokasi:</span>
+              <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                {formatRupiah(totalPaguRenja)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
+            {Object.entries(sumberDanaStats).map(([sdName, stats]) => {
+              const percentage = totalPaguRenja > 0 ? (stats.totalPagu / totalPaguRenja) * 100 : 0;
+              const isSelected = selectedSumberDana === sdName;
+              return (
+                <div
+                  key={sdName}
+                  onClick={() => setSelectedSumberDana(isSelected ? 'Semua' : sdName)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
+                      : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-800 truncate">{sdName}</span>
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                      {percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="text-sm font-black text-slate-900 mt-1">
+                    {formatRupiah(stats.totalPagu)}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200/60 font-medium">
+                    <span>{stats.count} Sub-Kegiatan</span>
+                    <span className="text-emerald-700 font-bold">{stats.urkCount} Usulan URK</span>
+                  </div>
+                  {/* Visual Progress Bar */}
+                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, percentage)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-          <span className="text-xs font-bold uppercase text-slate-500 mr-2 flex items-center gap-1 shrink-0">
-            <Filter className="w-3.5 h-3.5" /> Bidang:
-          </span>
-          {['Semua', 'SDA', 'BM', 'CK', 'PL', 'Tata Ruang', 'Sekretariat'].map(b => (
-            <button
-              key={b}
-              onClick={() => setSelectedBidang(b)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                selectedBidang === b
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            <span className="text-xs font-bold uppercase text-slate-500 mr-1 flex items-center gap-1 shrink-0">
+              <Filter className="w-3.5 h-3.5" /> Bidang:
+            </span>
+            {['Semua', 'SDA', 'BM', 'CK', 'PL', 'Tata Ruang', 'Sekretariat'].map(b => (
+              <button
+                key={b}
+                onClick={() => setSelectedBidang(b)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                  selectedBidang === b
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold uppercase text-slate-500 mr-1 shrink-0">
+              Sumber Dana:
+            </span>
+            <select
+              value={selectedSumberDana}
+              onChange={(e) => setSelectedSumberDana(e.target.value)}
+              className="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {b}
-            </button>
-          ))}
+              <option value="Semua">Semua Sumber Dana</option>
+              {Object.keys(sumberDanaStats).map(sd => (
+                <option key={sd} value={sd}>{sd}</option>
+              ))}
+            </select>
+            {selectedSumberDana !== 'Semua' && (
+              <button
+                onClick={() => setSelectedSumberDana('Semua')}
+                className="text-[10px] font-bold text-red-600 hover:underline px-1"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="relative w-full md:w-72">
@@ -474,8 +587,9 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
       ) : (
         <div className="space-y-4">
           {filteredPrograms.map(program => {
-            const subs = renjaData.subKegiatan.filter(s => s.programId === program.id);
-            const totalProgSubPagu = subs.reduce((a, b) => a + (b.paguSubKegiatan || 0), 0);
+            const allProgSubs = renjaData.subKegiatan.filter(s => s.programId === program.id);
+            const subs = allProgSubs.filter(s => selectedSumberDana === 'Semua' || (s.sumberDana || 'DAU') === selectedSumberDana);
+            const totalProgSubPagu = allProgSubs.reduce((a, b) => a + (b.paguSubKegiatan || 0), 0);
             const isExpanded = !!expandedPrograms[program.id];
 
             return (
@@ -822,11 +936,12 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
                   <select
                     value={newSubKegiatan.sumberDana}
                     onChange={e => setNewSubKegiatan({ ...newSubKegiatan, sumberDana: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
-                    {['DAU', 'DAK Fisik', 'DAK Non-Fisik', 'DBH', 'PAD', 'Lain-lain'].map(sd => (
-                      <option key={sd} value={sd}>{sd}</option>
+                    {SUMBER_DANA_LIST.map(sd => (
+                      <option key={sd} value={sd.split(' ')[0]}>{sd}</option>
                     ))}
+                    <option value="Lainnya">Sumber Dana Lainnya</option>
                   </select>
                 </div>
               </div>

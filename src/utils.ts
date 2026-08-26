@@ -594,6 +594,14 @@ export const printDokumenRenja = (
   const linkedCount = proposals.filter(p => p.isAkomodirRenja).length;
   const linkedBudget = proposals.filter(p => p.isAkomodirRenja).reduce((acc, p) => acc + (p.renjaPaguAlokasi || p.estimatedBudget || 0), 0);
 
+  const sumberDanaMap: Record<string, { total: number; count: number }> = {};
+  subKegiatan.forEach(s => {
+    const sd = s.sumberDana || 'DAU';
+    if (!sumberDanaMap[sd]) sumberDanaMap[sd] = { total: 0, count: 0 };
+    sumberDanaMap[sd].total += (s.paguSubKegiatan || 0);
+    sumberDanaMap[sd].count += 1;
+  });
+
   const html = `
     <!DOCTYPE html>
     <html lang="id">
@@ -644,6 +652,51 @@ export const printDokumenRenja = (
         </tr>
       </table>
 
+      <!-- I. Rekapitulasi Sumber Dana -->
+      <div style="margin-bottom: 14px;">
+        <h3 style="font-size: 9.5pt; margin: 0 0 5px 0; color: #0f172a; text-transform: uppercase;">
+          I. Rekapitulasi Alokasi Pagu Indikatif Berdasarkan Sumber Dana
+        </h3>
+        <table class="data-table" style="margin-bottom: 8px; width: 75%;">
+          <thead>
+            <tr>
+              <th style="width: 35px;">No</th>
+              <th>Sumber Pendanaan</th>
+              <th style="width: 130px;">Jumlah Sub-Kegiatan</th>
+              <th style="width: 170px;">Total Pagu Alokasi (Rp)</th>
+              <th style="width: 80px;">Proporsi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.keys(sumberDanaMap).length === 0 ? `
+              <tr><td colspan="5" class="center" style="color: #666; font-style: italic;">Belum ada data sub-kegiatan</td></tr>
+            ` : Object.entries(sumberDanaMap).map(([sd, data], idx) => {
+              const pct = totalPaguRenja > 0 ? ((data.total / totalPaguRenja) * 100).toFixed(1) : '0.0';
+              return `
+                <tr>
+                  <td class="center">${idx + 1}</td>
+                  <td><strong>${sd}</strong></td>
+                  <td class="center">${data.count} Sub-Kegiatan</td>
+                  <td class="number">${formatRupiah(data.total)}</td>
+                  <td class="center"><strong>${pct}%</strong></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f1f5f9; font-weight: bold;">
+              <th colspan="3" style="text-align: right;">TOTAL ALOKASI PAGU INDIKATIF :</th>
+              <th class="number" style="background: #dcfce7;">${formatRupiah(totalPaguRenja)}</th>
+              <th class="center">100%</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- II. Matriks Rincian Program & Sub-Kegiatan -->
+      <h3 style="font-size: 9.5pt; margin: 0 0 5px 0; color: #0f172a; text-transform: uppercase;">
+        II. Matriks Rincian Program dan Sub-Kegiatan RENJA
+      </h3>
       <table class="data-table">
         <thead>
           <tr>
