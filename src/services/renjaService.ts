@@ -14,6 +14,12 @@ export interface RenjaMasterData {
   subKegiatan: RenjaSubKegiatan[];
 }
 
+// Helper to detect and filter out legacy dummy template items
+const isDummyData = (programs: RenjaProgram[], subKegiatan: RenjaSubKegiatan[]): boolean => {
+  const dummyProgIds = ['prog_sda', 'prog_bm', 'prog_ck_air', 'prog_pl_limbah', 'prog_ck_gedung', 'prog_tr', 'prog_sekretariat'];
+  return programs.some(p => dummyProgIds.includes(p.id)) || subKegiatan.some(s => s.id.startsWith('sub_sda_') || s.id.startsWith('sub_bm_'));
+};
+
 export const getRenjaMasterData = async (): Promise<RenjaMasterData> => {
   // Check local storage cache first
   let cachedPrograms: RenjaProgram[] = [];
@@ -25,7 +31,18 @@ export const getRenjaMasterData = async (): Promise<RenjaMasterData> => {
     if (rawProg) cachedPrograms = JSON.parse(rawProg);
     if (rawSub) cachedSubKegiatan = JSON.parse(rawSub);
 
-    if (cachedPrograms.length > 0 && cachedSubKegiatan.length > 0) {
+    // If cache has old dummy data, clear it immediately
+    if (isDummyData(cachedPrograms, cachedSubKegiatan)) {
+      cachedPrograms = [];
+      cachedSubKegiatan = [];
+      localStorage.removeItem('cached_renja_programs');
+      localStorage.removeItem('cached_renja_subkegiatan');
+      // Overwrite firestore dummy data with empty array
+      await saveRenjaMasterData([], []);
+      return { programs: [], subKegiatan: [] };
+    }
+
+    if (cachedPrograms.length > 0 || cachedSubKegiatan.length > 0) {
       // Async refresh from Firestore in background
       fetchFromFirestore();
       return { programs: cachedPrograms, subKegiatan: cachedSubKegiatan };
@@ -42,8 +59,14 @@ const fetchFromFirestore = async (): Promise<RenjaMasterData> => {
 
     if (docSnap && docSnap.exists()) {
       const data = docSnap.data();
-      const programs = (data.programs && data.programs.length > 0) ? data.programs : DEFAULT_RENJA_PROGRAMS;
-      const subKegiatan = (data.subKegiatan && data.subKegiatan.length > 0) ? data.subKegiatan : DEFAULT_RENJA_SUB_KEGIATAN;
+      let programs: RenjaProgram[] = (data.programs && Array.isArray(data.programs)) ? data.programs : [];
+      let subKegiatan: RenjaSubKegiatan[] = (data.subKegiatan && Array.isArray(data.subKegiatan)) ? data.subKegiatan : [];
+
+      if (isDummyData(programs, subKegiatan)) {
+        programs = [];
+        subKegiatan = [];
+        await saveRenjaMasterData([], []);
+      }
 
       try {
         localStorage.setItem('cached_renja_programs', JSON.stringify(programs));
@@ -53,15 +76,37 @@ const fetchFromFirestore = async (): Promise<RenjaMasterData> => {
       return { programs, subKegiatan };
     }
   } catch (e) {
-    console.warn('Failed to load RENJA from Firestore, using defaults:', e);
+    console.warn('Failed to load RENJA from Firestore:', e);
   }
 
   try {
-    localStorage.setItem('cached_renja_programs', JSON.stringify(DEFAULT_RENJA_PROGRAMS));
-    localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(DEFAULT_RENJA_SUB_KEGIATAN));
+    localStorage.setItem('cached_renja_programs', JSON.stringify([]));
+    localStorage.setItem('cached_renja_subkegiatan', JSON.stringify([]));
   } catch (e) {}
 
-  return { programs: DEFAULT_RENJA_PROGRAMS, subKegiatan: DEFAULT_RENJA_SUB_KEGIATAN };
+  return { programs: [], subKegiatan: [] };
+};
+
+export const clearAllRenjaData = async (): Promise<void> => {
+  try {
+    localStorage.removeItem('cached_renja_programs');
+    localStorage.removeItem('cached_renja_subkegiatan');
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'appConfig', 'masterRenja');
+    await withTimeout(
+      setDoc(docRef, {
+        programs: [],
+        subKegiatan: [],
+        updatedAt: new Date().toISOString()
+      }),
+      8000,
+      undefined
+    );
+  } catch (e) {
+    console.warn('Error clearing Firestore RENJA:', e);
+  }
 };
 
 export const saveRenjaMasterData = async (programs: RenjaProgram[], subKegiatan: RenjaSubKegiatan[]) => {

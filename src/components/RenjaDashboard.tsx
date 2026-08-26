@@ -8,6 +8,7 @@ import {
 import { 
   getRenjaMasterData, 
   saveRenjaMasterData, 
+  clearAllRenjaData,
   linkUrkToRenja, 
   unlinkUrkFromRenja, 
   RenjaMasterData 
@@ -251,6 +252,23 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     setAllProposals(prev => prev.map(p => p.id === updatedProposal.id ? updatedProposal : p));
   };
 
+  const handleClearAll = async () => {
+    if (!window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan seluruh data Program & Sub-Kegiatan RENJA? Tindakan ini akan menghapus data dummy dan memulai dengan lembar kerja kosong (0 pagu).')) return;
+    
+    await clearAllRenjaData();
+    setRenjaData({ programs: [], subKegiatan: [] });
+    // Reset linkage status on proposals
+    setAllProposals(prev => prev.map(p => ({
+      ...p,
+      isAkomodirRenja: false,
+      renjaSubKegiatanId: undefined,
+      renjaSubKegiatanName: undefined,
+      renjaProgramId: undefined,
+      renjaProgramName: undefined,
+      renjaPaguAlokasi: undefined
+    })));
+  };
+
   // Calculations & Statistics
   const filteredPrograms = renjaData.programs.filter(p => {
     if (selectedBidang !== 'Semua' && p.bidangPengampu !== selectedBidang) return false;
@@ -293,19 +311,32 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => printDokumenRenja(renjaData.programs, renjaData.subKegiatan, allProposals, '2025')}
-              className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border border-white/20 shadow-sm"
-            >
-              <Printer className="w-4 h-4" /> Cetak Dokumen RENJA
-            </button>
-            {isAdmin && (
+            {renjaData.programs.length > 0 && (
               <button
-                onClick={() => setIsAddProgramOpen(true)}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/30"
+                onClick={() => printDokumenRenja(renjaData.programs, renjaData.subKegiatan, allProposals, '2025')}
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border border-white/20 shadow-sm"
               >
-                <Plus className="w-4 h-4" /> Tambah Program Baru
+                <Printer className="w-4 h-4" /> Cetak Dokumen RENJA
               </button>
+            )}
+            {isAdmin && (
+              <>
+                {renjaData.programs.length > 0 && (
+                  <button
+                    onClick={handleClearAll}
+                    title="Hapus semua program/subkegiatan dummy"
+                    className="inline-flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all border border-red-400/30"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Kosongkan Data RENJA
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsAddProgramOpen(true)}
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/30"
+                >
+                  <Plus className="w-4 h-4" /> Tambah Program Baru
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -414,10 +445,31 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
           <p className="font-semibold text-sm">Memuat Data RENJA OPD...</p>
         </div>
       ) : filteredPrograms.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center text-slate-500 border border-slate-200">
-          <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="font-bold text-slate-700">Tidak ada Program RENJA yang cocok</p>
-          <p className="text-xs text-slate-400 mt-1">Coba ganti filter bidang atau cari kata kunci lain.</p>
+        <div className="bg-white rounded-2xl p-12 text-center text-slate-500 border border-slate-200 shadow-sm max-w-2xl mx-auto my-6">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100">
+            <Building2 className="w-8 h-8" />
+          </div>
+          {renjaData.programs.length === 0 ? (
+            <>
+              <h3 className="font-extrabold text-lg text-slate-900">Lembar Kerja RENJA OPD Masih Kosong</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                Data dummy telah dibersihkan. Anda sekarang dapat mulai menginput Program dan Sub-Kegiatan resmi sesuai DPA/Renja Dinas PUPR Kabupaten Nagekeo.
+              </p>
+              {isAdmin && (
+                <button
+                  onClick={() => setIsAddProgramOpen(true)}
+                  className="mt-5 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all"
+                >
+                  <Plus className="w-4 h-4" /> Mulai Tambah Program Baru
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <h3 className="font-bold text-slate-900">Tidak ada Program yang cocok dengan filter</h3>
+              <p className="text-xs text-slate-400 mt-1">Coba ganti filter bidang atau reset pencarian kata kunci.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
