@@ -1,13 +1,25 @@
 import { IndependenceDayBanner } from './components/IndependenceDayBanner';
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom';
 import { initAuth, googleSignIn, logout, getAccessToken } from './auth';
 import { User } from 'firebase/auth';
 import Settings from './components/Settings';
 import BidangDashboard from './components/BidangDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import RenjaDashboard from './components/RenjaDashboard';
+import UrkRenjaMatrix from './components/UrkRenjaMatrix';
 import PlanningBanner from './components/PlanningBanner';
-import { LogOut, Settings as SettingsIcon, LayoutDashboard, FileSpreadsheet, Users, X } from 'lucide-react';
+import { 
+  LogOut, 
+  Settings as SettingsIcon, 
+  LayoutDashboard, 
+  FileSpreadsheet, 
+  FolderGit2, 
+  GitMerge, 
+  Layers, 
+  BookOpen, 
+  ShieldCheck 
+} from 'lucide-react';
 import { ADMIN_EMAILS } from './types';
 
 export default function App() {
@@ -97,27 +109,84 @@ export default function App() {
             </div>
           </div>
           
-          <nav className="flex-1 px-4 py-2 space-y-1">
-            <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-4 tracking-widest">Main Menu</div>
+          <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
+            <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-3 tracking-widest">
+              Modul Perencanaan
+            </div>
             
-            {isAdmin ? (
+            {/* 1. Usulan Rencana Kerja (e-URK) */}
+            <NavLink 
+              to="/" 
+              end
+              className={({ isActive }) => 
+                `flex items-center gap-3 p-3 rounded-xl text-xs font-bold transition-all ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <LayoutDashboard className="w-4 h-4 text-sky-400" />
+              <div className="flex-1">
+                <div>e-URK (Aspirasi)</div>
+                <div className="text-[10px] font-normal opacity-75">Penampungan & Filter SIPD</div>
+              </div>
+            </NavLink>
+
+            {/* 2. Rencana Kerja OPD (RENJA) */}
+            <NavLink 
+              to="/renja" 
+              className={({ isActive }) => 
+                `flex items-center gap-3 p-3 rounded-xl text-xs font-bold transition-all ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <FolderGit2 className="w-4 h-4 text-emerald-400" />
+              <div className="flex-1">
+                <div>RENJA OPD Dinas</div>
+                <div className="text-[10px] font-normal opacity-75">Program & Sub-Kegiatan</div>
+              </div>
+            </NavLink>
+
+            {/* 3. Matriks Keterkaitan URK ↔ RENJA */}
+            <NavLink 
+              to="/matriks" 
+              className={({ isActive }) => 
+                `flex items-center gap-3 p-3 rounded-xl text-xs font-bold transition-all ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <GitMerge className="w-4 h-4 text-amber-400" />
+              <div className="flex-1">
+                <div>Matriks URK ↔ RENJA</div>
+                <div className="text-[10px] font-normal opacity-75">Penyelarasan Aspirasi</div>
+              </div>
+            </NavLink>
+
+            {isAdmin && (
               <>
-                <Link to="/" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
-                  <LayoutDashboard className="w-5 h-5" />
-                  <span>Dashboard Admin</span>
-                </Link>
-                <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-4 tracking-widest mt-4">Admin Tools</div>
-                <Link to="/settings" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
-                  <SettingsIcon className="w-5 h-5" />
-                  <span>Pengaturan Bidang</span>
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/" className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-yellow-400/20 hover:text-blue-900 text-slate-300">
-                  <LayoutDashboard className="w-5 h-5" />
-                  <span>Dashboard Bidang</span>
-                </Link>
+                <div className="text-[10px] font-bold text-slate-500 uppercase px-3 pt-5 pb-2 tracking-widest">
+                  Administrator
+                </div>
+                <NavLink 
+                  to="/settings" 
+                  className={({ isActive }) => 
+                    `flex items-center gap-3 p-3 rounded-xl text-xs font-bold transition-all ${
+                      isActive 
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`
+                  }
+                >
+                  <SettingsIcon className="w-4 h-4 text-purple-400" />
+                  <span>Pengaturan & Master Data</span>
+                </NavLink>
               </>
             )}
           </nav>
@@ -146,17 +215,38 @@ export default function App() {
             <div className="max-w-6xl mx-auto">
               <PlanningBanner />
               <Routes>
-                {isAdmin ? (
-                  <>
-                    <Route path="/" element={<AdminDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </>
-                ) : (
-                  <>
-                    <Route path="/" element={<BidangDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </>
-                )}
+                <Route 
+                  path="/" 
+                  element={
+                    isAdmin ? (
+                      <AdminDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />
+                    ) : (
+                      <BidangDashboard userEmail={user?.email || ''} userName={user?.displayName || ''} />
+                    )
+                  } 
+                />
+                <Route 
+                  path="/renja" 
+                  element={
+                    <RenjaDashboard 
+                      userEmail={user?.email || ''} 
+                      userName={user?.displayName || ''} 
+                      isAdmin={!!isAdmin} 
+                    />
+                  } 
+                />
+                <Route 
+                  path="/matriks" 
+                  element={
+                    <UrkRenjaMatrix 
+                      userEmail={user?.email || ''} 
+                      userName={user?.displayName || ''} 
+                      isAdmin={!!isAdmin} 
+                    />
+                  } 
+                />
+                {isAdmin && <Route path="/settings" element={<Settings />} />}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
           </div>

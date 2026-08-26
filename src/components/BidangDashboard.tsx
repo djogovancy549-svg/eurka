@@ -921,6 +921,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                       <div className="text-[11px] text-slate-500 mt-0.5">
                         {p.programName ? `Prog: ${p.programName}` : ''} {p.activityName ? `• Keg: ${p.activityName}` : ''}
                       </div>
+                      {p.isAkomodirRenja ? (
+                        <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                          <CheckCircle className="w-3 h-3 text-emerald-600" />
+                          <span>RENJA: {p.renjaSubKegiatanName || p.renjaProgramName || 'Terakomodir'}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px]">
+                          <span>Bank Data URK</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-bold text-blue-900">{p.sumberUsulan || p.jenisUsulan || 'Usulan Rencana'}</div>
@@ -1037,6 +1047,45 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               <div>
                 <p className="text-slate-500 font-bold">Status Kesiapan SIPD:</p>
                 <div className="mt-1">{renderSipdBadge(selectedProposalDetail.sipdStatus, selectedProposalDetail.sipdRegistrationNo)}</div>
+              </div>
+
+              {/* KETERKAITAN RENJA OPD */}
+              <div className="col-span-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-3 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-blue-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    Keterkaitan Dokumen RENJA OPD Dinas PUPR:
+                  </p>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${selectedProposalDetail.isAkomodirRenja ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                    {selectedProposalDetail.isAkomodirRenja ? 'TERAKOMODIR DI RENJA' : 'BANK DATA URK'}
+                  </span>
+                </div>
+                {selectedProposalDetail.isAkomodirRenja ? (
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                    <div>
+                      <span className="text-slate-500">Program Renja:</span>
+                      <p className="font-bold text-slate-800">{selectedProposalDetail.renjaProgramName || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Sub-Kegiatan Renja:</span>
+                      <p className="font-bold text-slate-800">{selectedProposalDetail.renjaSubKegiatanName || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Pagu Alokasi Renja:</span>
+                      <p className="font-extrabold text-emerald-700">{formatRupiah(selectedProposalDetail.renjaPaguAlokasi || selectedProposalDetail.estimatedBudget)}</p>
+                    </div>
+                    {selectedProposalDetail.catatanAkomodasiRenja && (
+                      <div className="col-span-2">
+                        <span className="text-slate-500">Catatan Penyelarasan:</span>
+                        <p className="text-slate-700 italic">{selectedProposalDetail.catatanAkomodasiRenja}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-slate-600 text-xs mt-1">
+                    Usulan ini masih tersimpan dalam penampungan e-URK dan belum diintegrasikan ke Sub-Kegiatan RENJA OPD.
+                  </p>
+                )}
               </div>
 
               {selectedProposalDetail.adminNotes && (

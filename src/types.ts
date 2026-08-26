@@ -60,7 +60,208 @@ export interface Proposal {
   sipdStatus?: SipdStatus;
   sipdRegistrationNo?: string;
   sipdNotes?: string;
+  // Linkage Keterkaitan dengan RENJA OPD
+  isAkomodirRenja?: boolean;
+  renjaProgramId?: string;
+  renjaProgramName?: string;
+  renjaSubKegiatanId?: string;
+  renjaSubKegiatanName?: string;
+  renjaPaguAlokasi?: number;
+  catatanAkomodasiRenja?: string;
 }
+
+export interface RenjaProgram {
+  id: string;
+  kodeProgram: string;
+  namaProgram: string;
+  bidangPengampu: string;
+  indikatorKinerja: string;
+  targetKinerja: string;
+  paguProgram: number;
+  tahun: string;
+}
+
+export interface RenjaSubKegiatan {
+  id: string;
+  programId: string;
+  kodeSubKegiatan: string;
+  namaSubKegiatan: string;
+  indikatorSubKegiatan: string;
+  targetVolume: string;
+  satuan: string;
+  lokasi: string;
+  sumberDana: string;
+  paguSubKegiatan: number;
+  bidangPengampu: string;
+  tahun: string;
+  linkedProposalIds?: string[]; // List of URK Proposal IDs linked/absorbed
+}
+
+export const DEFAULT_RENJA_PROGRAMS: RenjaProgram[] = [
+  {
+    id: 'prog_sda',
+    kodeProgram: '1.03.02',
+    namaProgram: 'Program Pengelolaan Sumber Daya Air (SDA)',
+    bidangPengampu: 'SDA',
+    indikatorKinerja: 'Persentase Luas Daerah Irigasi Kewenangan Kabupaten yang Berfungsi Baik',
+    targetKinerja: '78 %',
+    paguProgram: 15500000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_bm',
+    kodeProgram: '1.03.03',
+    namaProgram: 'Program Penyelenggaraan Jalan dan Jembatan',
+    bidangPengampu: 'BM',
+    indikatorKinerja: 'Persentase Panjang Jalan Kabupaten dalam Kondisi Mantap',
+    targetKinerja: '65 %',
+    paguProgram: 28000000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_ck_air',
+    kodeProgram: '1.03.04',
+    namaProgram: 'Program Pengelolaan dan Pengembangan Sistem Penyediaan Air Minum (SPAM)',
+    bidangPengampu: 'CK',
+    indikatorKinerja: 'Persentase Rumah Tangga yang Memiliki Akses Air Minum Layak',
+    targetKinerja: '82 %',
+    paguProgram: 12000000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_pl_limbah',
+    kodeProgram: '1.03.05',
+    namaProgram: 'Program Pengelolaan dan Pengembangan Sistem Air Limbah dan Drainase',
+    bidangPengampu: 'PL',
+    indikatorKinerja: 'Persentase Rumah Tangga yang Memiliki Akses Sanitasi Layak & Drainase Lancar',
+    targetKinerja: '75 %',
+    paguProgram: 8500000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_ck_gedung',
+    kodeProgram: '1.03.06',
+    namaProgram: 'Program Penataan Bangunan Gedung dan Lingkungan',
+    bidangPengampu: 'CK',
+    indikatorKinerja: 'Persentase Bangunan Gedung Pemerintah yang Memenuhi Standar Teknis',
+    targetKinerja: '80 %',
+    paguProgram: 6500000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_tr',
+    kodeProgram: '1.03.07',
+    namaProgram: 'Program Penyelenggaraan Penataan Ruang',
+    bidangPengampu: 'Tata Ruang',
+    indikatorKinerja: 'Tersedianya Dokumen RDTR dan Kesesuaian Pemanfaatan Ruang (KKPR)',
+    targetKinerja: '100 %',
+    paguProgram: 2500000000,
+    tahun: '2025'
+  },
+  {
+    id: 'prog_sekretariat',
+    kodeProgram: '1.03.01',
+    namaProgram: 'Program Penunjang Urusan Pemerintahan Daerah Kabupaten',
+    bidangPengampu: 'Sekretariat',
+    indikatorKinerja: 'Nilai Evaluasi Akuntabilitas Kinerja Instansi Pemerintah (SAKIP) DPUPR',
+    targetKinerja: 'Nilai B / Baik',
+    paguProgram: 5000000000,
+    tahun: '2025'
+  }
+];
+
+export const DEFAULT_RENJA_SUB_KEGIATAN: RenjaSubKegiatan[] = [
+  {
+    id: 'sub_sda_01',
+    programId: 'prog_sda',
+    kodeSubKegiatan: '1.03.02.2.01.01',
+    namaSubKegiatan: 'Pembangunan Jaringan Irigasi Permukaan',
+    indikatorSubKegiatan: 'Panjang Saluran Irigasi Baru yang Dibangun',
+    targetVolume: '4.5 Km',
+    satuan: 'Km',
+    lokasi: 'Kecamatan Aesesa & Boawae',
+    sumberDana: 'DAK Fisik',
+    paguSubKegiatan: 6000000000,
+    bidangPengampu: 'SDA',
+    tahun: '2025',
+    linkedProposalIds: []
+  },
+  {
+    id: 'sub_sda_02',
+    programId: 'prog_sda',
+    kodeSubKegiatan: '1.03.02.2.01.02',
+    namaSubKegiatan: 'Rehabilitasi Jaringan Irigasi Permukaan',
+    indikatorSubKegiatan: 'Panjang Saluran Irigasi yang Direhabilitasi/Ditingkatkan',
+    targetVolume: '8.2 Km',
+    satuan: 'Km',
+    lokasi: 'Kecamatan Aesesa Selatan, Mauponggo, Keo Tengah',
+    sumberDana: 'DAU',
+    paguSubKegiatan: 5500000000,
+    bidangPengampu: 'SDA',
+    tahun: '2025',
+    linkedProposalIds: []
+  },
+  {
+    id: 'sub_bm_01',
+    programId: 'prog_bm',
+    kodeSubKegiatan: '1.03.03.2.01.01',
+    namaSubKegiatan: 'Peningkatan / Rekonstruksi Jalan Kabupaten (Hotmix / Lapen)',
+    indikatorSubKegiatan: 'Panjang Jalan Kabupaten yang Ditingkatkan',
+    targetVolume: '14.0 Km',
+    satuan: 'Km',
+    lokasi: 'Kecamatan Wolowae, Nangaroro, Mauponggo',
+    sumberDana: 'DAK Fisik',
+    paguSubKegiatan: 18000000000,
+    bidangPengampu: 'BM',
+    tahun: '2025',
+    linkedProposalIds: []
+  },
+  {
+    id: 'sub_bm_02',
+    programId: 'prog_bm',
+    kodeSubKegiatan: '1.03.03.2.01.02',
+    namaSubKegiatan: 'Pemeliharaan Rutin / Berkala Jalan dan Jembatan',
+    indikatorSubKegiatan: 'Panjang Jalan dan Jumlah Jembatan yang Dipelihara',
+    targetVolume: '22.0 Km',
+    satuan: 'Km',
+    lokasi: '7 Kecamatan se-Kabupaten Nagekeo',
+    sumberDana: 'DAU',
+    paguSubKegiatan: 6500000000,
+    bidangPengampu: 'BM',
+    tahun: '2025',
+    linkedProposalIds: []
+  },
+  {
+    id: 'sub_ck_01',
+    programId: 'prog_ck_air',
+    kodeSubKegiatan: '1.03.04.2.01.01',
+    namaSubKegiatan: 'Pembangunan / Perluasan Jaringan Perpipaan SPAM Desa',
+    indikatorSubKegiatan: 'Jumlah Sambungan Rumah (SR) / Panjang Pipa SPAM Terpasang',
+    targetVolume: '750 SR / 12 Km',
+    satuan: 'SR',
+    lokasi: 'Desa-Desa Rawan Air di Nangaroro & Mauponggo',
+    sumberDana: 'DAK Fisik',
+    paguSubKegiatan: 7500000000,
+    bidangPengampu: 'CK',
+    tahun: '2025',
+    linkedProposalIds: []
+  },
+  {
+    id: 'sub_pl_01',
+    programId: 'prog_pl_limbah',
+    kodeSubKegiatan: '1.03.05.2.01.01',
+    namaSubKegiatan: 'Pembangunan Saluran Drainase Lingkungan Permukiman',
+    indikatorSubKegiatan: 'Panjang Saluran Drainase dan Trotoar Permukiman',
+    targetVolume: '3.8 Km',
+    satuan: 'Km',
+    lokasi: 'Perkotaan Mbay & Kawasan Permukiman Padat',
+    sumberDana: 'DAU',
+    paguSubKegiatan: 4500000000,
+    bidangPengampu: 'PL',
+    tahun: '2025',
+    linkedProposalIds: []
+  }
+];
 
 export interface Requirement {
   id: string;

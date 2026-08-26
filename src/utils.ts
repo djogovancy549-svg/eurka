@@ -578,3 +578,317 @@ export const exportCsvSIPD = (proposals: any[], filename = 'rekap_usulan_siap_si
   document.body.removeChild(link);
 };
 
+export const printDokumenRenja = (
+  programs: any[],
+  subKegiatan: any[],
+  proposals: any[],
+  tahun: string = '2025'
+) => {
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const totalPaguRenja = subKegiatan.reduce((acc, s) => acc + (s.paguSubKegiatan || 0), 0);
+  const linkedCount = proposals.filter(p => p.isAkomodirRenja).length;
+  const linkedBudget = proposals.filter(p => p.isAkomodirRenja).reduce((acc, p) => acc + (p.renjaPaguAlokasi || p.estimatedBudget || 0), 0);
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Dokumen Rencana Kerja (RENJA) OPD - DPUPR Nagekeo</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: 'Arial', sans-serif; color: #111; margin: 0; padding: 15px; font-size: 9pt; }
+        .header { text-align: center; border-bottom: 3px double #111; padding-bottom: 10px; margin-bottom: 12px; }
+        .header h1 { font-size: 14pt; margin: 0 0 3px 0; text-transform: uppercase; }
+        .header h2 { font-size: 12pt; margin: 0; color: #0f172a; }
+        .header p { font-size: 9pt; margin: 3px 0 0 0; color: #555; }
+        .meta-box { width: 100%; margin-bottom: 12px; font-size: 9pt; border-collapse: collapse; }
+        .meta-box td { padding: 3px 5px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .data-table th, .data-table td { border: 1px solid #333; padding: 6px 8px; vertical-align: top; }
+        .data-table th { background: #f1f5f9; font-weight: bold; text-align: center; }
+        .prog-row { background: #e2e8f0; font-weight: bold; }
+        .number { text-align: right; font-weight: 600; white-space: nowrap; }
+        .center { text-align: center; }
+        .badge-urk { background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 3px; font-size: 7.5pt; font-weight: bold; display: inline-block; }
+        .signatures { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+        .sig-block { width: 35%; text-align: center; }
+        .sig-space { height: 55px; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>DOKUMEN RENCANA KERJA PERANGKAT DAERAH (RENJA OPD)</h2>
+        <p>Dinas Pekerjaan Umum dan Penataan Ruang &bull; Tahun Anggaran ${tahun}</p>
+      </div>
+
+      <table class="meta-box">
+        <tr>
+          <td style="width: 180px;"><strong>Urusan Pemerintahan</strong></td>
+          <td>: 1. Pekerjaan Umum dan Penataan Ruang</td>
+          <td style="width: 180px;"><strong>Total Pagu Renja</strong></td>
+          <td>: <strong>${formatRupiah(totalPaguRenja)}</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Organisasi / OPD</strong></td>
+          <td>: 1.03.01 Dinas Pekerjaan Umum dan Penataan Ruang</td>
+          <td><strong>Usulan URK Terakomodir</strong></td>
+          <td>: <strong>${linkedCount} Usulan (${formatRupiah(linkedBudget)})</strong></td>
+        </tr>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 100px;">Kode Rekening</th>
+            <th>Program / Kegiatan / Sub-Kegiatan</th>
+            <th style="width: 160px;">Indikator & Target Kinerja</th>
+            <th style="width: 120px;">Lokasi</th>
+            <th style="width: 80px;">Sumber Dana</th>
+            <th style="width: 120px;">Pagu Anggaran (Rp)</th>
+            <th style="width: 140px;">Usulan URK Terkait</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${programs.map(prog => {
+            const subs = subKegiatan.filter(s => s.programId === prog.id);
+            const totalProgPagu = subs.reduce((a, b) => a + (b.paguSubKegiatan || 0), 0);
+            return `
+              <tr class="prog-row">
+                <td>${prog.kodeProgram}</td>
+                <td><strong>${prog.namaProgram}</strong> (Bidang: ${prog.bidangPengampu})</td>
+                <td>${prog.indikatorKinerja}<br><small>Target: <strong>${prog.targetKinerja}</strong></small></td>
+                <td>Kab. Nagekeo</td>
+                <td class="center">-</td>
+                <td class="number">${formatRupiah(totalProgPagu || prog.paguProgram)}</td>
+                <td class="center">-</td>
+              </tr>
+              ${subs.map(sub => {
+                const linked = proposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
+                return `
+                  <tr>
+                    <td style="padding-left: 12px;">${sub.kodeSubKegiatan}</td>
+                    <td style="padding-left: 15px;">
+                      <strong>${sub.namaSubKegiatan}</strong>
+                      <div style="font-size: 8pt; color: #555;">Bidang: ${sub.bidangPengampu}</div>
+                    </td>
+                    <td>${sub.indikatorSubKegiatan}<br><small>Vol: <strong>${sub.targetVolume} ${sub.satuan || ''}</strong></small></td>
+                    <td>${sub.lokasi || 'Nagekeo'}</td>
+                    <td class="center"><strong>${sub.sumberDana || 'DAU'}</strong></td>
+                    <td class="number">${formatRupiah(sub.paguSubKegiatan)}</td>
+                    <td>
+                      ${linked.length === 0 
+                        ? '<span style="color:#94a3b8; font-size:8pt;">Renja Murni Dinas</span>' 
+                        : linked.map(p => `
+                            <div style="margin-bottom: 3px;">
+                              <span class="badge-urk">${p.sumberUsulan || 'URK'}: ${p.projectName} (${formatRupiah(p.renjaPaguAlokasi || p.estimatedBudget)})</span>
+                            </div>
+                          `).join('')
+                      }
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background: #e2e8f0; font-weight: bold;">
+            <th colspan="5" style="text-align: right;">TOTAL PAGU RENJA OPD :</th>
+            <th class="number" style="background: #dcfce7;">${formatRupiah(totalPaguRenja)}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Mengesahkan,<br>Kepala Dinas Pekerjaan Umum dan Penataan Ruang<br>Kabupaten Nagekeo</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Kepala Sub Bagian Program & Evaluasi<br>Dinas PUPR Kabupaten Nagekeo</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=750');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
+export const printMatriksUrkRenja = (
+  proposals: any[],
+  filterTitle: string = 'Seluruh Wilayah / Usulan'
+) => {
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const totalUsulan = proposals.length;
+  const totalBudget = proposals.reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+  const linkedProposals = proposals.filter(p => p.isAkomodirRenja);
+  const unlinkedProposals = proposals.filter(p => !p.isAkomodirRenja);
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Matriks Penyelarasan Keterkaitan e-URK ↔ RENJA OPD - DPUPR Nagekeo</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: 'Arial', sans-serif; color: #111; margin: 0; padding: 15px; font-size: 8.5pt; line-height: 1.3; }
+        .header { text-align: center; border-bottom: 3px double #111; padding-bottom: 10px; margin-bottom: 12px; }
+        .header h1 { font-size: 14pt; margin: 0 0 3px 0; text-transform: uppercase; }
+        .header h2 { font-size: 11.5pt; margin: 0; color: #0f172a; }
+        .header p { font-size: 9pt; margin: 3px 0 0 0; color: #555; }
+        .meta-box { width: 100%; margin-bottom: 12px; font-size: 9pt; }
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .data-table th, .data-table td { border: 1px solid #333; padding: 5px 6px; vertical-align: top; }
+        .data-table th { background: #f1f5f9; font-weight: bold; text-align: center; font-size: 8pt; }
+        .number { text-align: right; font-weight: 600; white-space: nowrap; }
+        .center { text-align: center; }
+        .badge-akomodir { background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 2px 5px; border-radius: 3px; font-weight: bold; font-size: 7.5pt; display: inline-block; }
+        .badge-pending { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; padding: 2px 5px; border-radius: 3px; font-weight: bold; font-size: 7.5pt; display: inline-block; }
+        .signatures { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+        .sig-block { width: 35%; text-align: center; }
+        .sig-space { height: 50px; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>MATRIKS PENYELARASAN USULAN RENCANA KERJA (e-URK) ↔ RENJA OPD DINAS PUPR</h2>
+        <p>Sinergi Aspirasi Musrenbang Desa/Kecamatan & POKIR DPRD dengan Dokumen Perencanaan Kerja Dinas PUPR</p>
+      </div>
+
+      <table class="meta-box">
+        <tr>
+          <td><strong>Filter Wilayah/Kategori</strong>: ${filterTitle}</td>
+          <td><strong>Total Usulan Aspirasi</strong>: ${totalUsulan} Usulan (${formatRupiah(totalBudget)})</td>
+        </tr>
+        <tr>
+          <td><strong>Status Keterkaitan</strong>: <span class="badge-akomodir">${linkedProposals.length} Terakomodir di RENJA</span> &nbsp;|&nbsp; <span class="badge-pending">${unlinkedProposals.length} Belum Diakomodir</span></td>
+          <td><strong>Tanggal Matriks</strong>: ${dateStr}</td>
+        </tr>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width: 25px;">No.</th>
+            <th colspan="4" style="background: #e0f2fe; color: #0369a1;">DATA USULAN RENCANA KERJA (e-URK)</th>
+            <th colspan="3" style="background: #fef3c7; color: #92400e;">INTEGRASI KE DALAM RENJA PERANGKAT DAERAH (OPD)</th>
+            <th rowspan="2" style="width: 100px;">Status SIPD & Catatan</th>
+          </tr>
+          <tr>
+            <th style="width: 90px; background: #e0f2fe;">Sumber & Pengusul</th>
+            <th style="width: 90px; background: #e0f2fe;">Lokasi (Kec/Desa)</th>
+            <th style="background: #e0f2fe;">Nama Usulan / Pekerjaan</th>
+            <th style="width: 90px; background: #e0f2fe;">Pagu Usulan (Rp)</th>
+            <th style="background: #fef3c7;">Program Renja Dinas</th>
+            <th style="background: #fef3c7;">Sub-Kegiatan Renja Terkait</th>
+            <th style="width: 90px; background: #fef3c7;">Alokasi Renja (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${proposals.map((p, idx) => {
+            const pengusulText = Array.isArray(p.pengusulPokir) && p.pengusulPokir.length > 0 
+              ? p.pengusulPokir.join(', ') 
+              : (p.submittedBy || '-');
+
+            return `
+              <tr>
+                <td class="center">${idx + 1}</td>
+                <td>
+                  <strong>${p.sumberUsulan || p.jenisUsulan || 'URK'}</strong>
+                  <div style="font-size: 7.5pt; color: #555;">${pengusulText}</div>
+                </td>
+                <td>
+                  <strong>${p.kecamatan || '-'}</strong>
+                  <div style="font-size: 7.5pt; color: #555;">${p.desa || p.location || '-'}</div>
+                </td>
+                <td>
+                  <strong>${p.projectName || '-'}</strong>
+                  <div style="font-size: 7.5pt; color: #64748b; font-style: italic;">${p.justification || ''}</div>
+                </td>
+                <td class="number">${formatRupiah(p.estimatedBudget || 0)}</td>
+                <td>
+                  ${p.isAkomodirRenja && p.renjaProgramName 
+                    ? `<strong>${p.renjaProgramName}</strong>` 
+                    : '<span style="color: #94a3b8; font-style: italic;">- Belum dipetakan -</span>'}
+                </td>
+                <td>
+                  ${p.isAkomodirRenja && p.renjaSubKegiatanName
+                    ? `<div><span class="badge-akomodir">TERAKOMODIR</span></div><strong>${p.renjaSubKegiatanName}</strong>`
+                    : `<div><span class="badge-pending">BELUM DIAKOMODIR</span></div><span style="font-size:7.5pt; color:#64748b;">Aspirasi ditampung di Bank Data URK</span>`}
+                </td>
+                <td class="number">
+                  ${p.isAkomodirRenja ? formatRupiah(p.renjaPaguAlokasi || p.estimatedBudget || 0) : '-'}
+                </td>
+                <td>
+                  <div style="font-weight: 600;">${(p.sipdStatus || 'draft').toUpperCase()}</div>
+                  <div style="font-size: 7.5pt; color: #555;">${p.catatanAkomodasiRenja || p.adminNotes || '-'}</div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Mengetahui,<br>Kepala Bapelitbangda Kabupaten Nagekeo</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Kepala Dinas Pekerjaan Umum dan Penataan Ruang</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=750');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
+
