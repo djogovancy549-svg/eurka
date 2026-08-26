@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Sistem Usulan Rencana Kerja (e-URK) Pra-SIPD Nagekeo",
+  "description": "Aplikasi penampung, filterisasi, dan verifikasi usulan rencana kerja (Musrenbang 115 Desa/7 Kecamatan, Pokir DPRD, Renja OPD) sebelum diinput ke SIPD Kabupaten Nagekeo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

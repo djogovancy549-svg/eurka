@@ -57,6 +57,13 @@ export const initSpreadsheetHeaders = async (accessToken: string, spreadsheetId:
             { userEnteredValue: { stringValue: 'Admin Notes' } },
             { userEnteredValue: { stringValue: 'Attachments' } },
             { userEnteredValue: { stringValue: 'Jenis Usulan' } },
+            { userEnteredValue: { stringValue: 'Sumber Usulan' } },
+            { userEnteredValue: { stringValue: 'Kecamatan' } },
+            { userEnteredValue: { stringValue: 'Desa / Kelurahan' } },
+            { userEnteredValue: { stringValue: 'Pengusul Pokir DPRD' } },
+            { userEnteredValue: { stringValue: 'Status SIPD' } },
+            { userEnteredValue: { stringValue: 'No Registrasi SIPD' } },
+            { userEnteredValue: { stringValue: 'Catatan Kelayakan SIPD' } },
           ]
         }],
         fields: 'userEnteredValue'
@@ -166,8 +173,20 @@ export const appendRow = async (accessToken: string, spreadsheetId: string, rang
     }
   }
 
-  // Update exactly at the next row
-  const updateRange = `${sheetName}!A${nextRow}:Q${nextRow}`;
+  // Calculate the column letter based on values length
+  const getColLetter = (colIndex: number): string => {
+    let temp = '';
+    let num = colIndex;
+    while (num > 0) {
+      const rem = (num - 1) % 26;
+      temp = String.fromCharCode(65 + rem) + temp;
+      num = Math.floor((num - 1) / 26);
+    }
+    return temp || 'A';
+  };
+
+  const endColLetter = getColLetter(Math.max(values.length, 17));
+  const updateRange = `${sheetName}!A${nextRow}:${endColLetter}${nextRow}`;
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     headers: {

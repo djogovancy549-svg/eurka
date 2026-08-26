@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getRows, appendRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
-import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements } from '../types';
-import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal } from '../services/configService';
-import { parseMoney, formatRupiah, printRekapanDisetujui } from '../utils';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer } from 'lucide-react';
+import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
+import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagekeoWilayah } from '../services/configService';
+import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
+import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -21,6 +22,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [selectedConfig, setSelectedConfig] = useState<BidangConfig | null>(null);
   const activeRequirements = getUnitActiveRequirements(selectedConfig, requirements);
   
+  // Wilayah Master
+  const [wilayahList, setWilayahList] = useState<KecamatanDesa[]>(DEFAULT_NAGEKEO_WILAYAH);
+
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -33,7 +37,50 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [tempSheetId, setTempSheetId] = useState('');
   const [tempFolderUrl, setTempFolderUrl] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [activeFolderProposal, setActiveFolderProposal] = useState<Proposal | null>(null);
+  const [selectedProposalDetail, setSelectedProposalDetail] = useState<Proposal | null>(null);
+
+  // Filters
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterKecamatan, setFilterKecamatan] = useState('ALL');
+  const [filterDesa, setFilterDesa] = useState('ALL');
+  const [filterSumber, setFilterSumber] = useState('ALL');
+  const [filterSipd, setFilterSipd] = useState('ALL');
+
+  // Form State
+  const [formData, setFormData] = useState({
+    tahunUsulan: '2025',
+    jenisUsulan: 'Baru',
+    sumberUsulan: 'Musrenbang Desa / Kelurahan',
+    kecamatan: '',
+    desa: '',
+    programName: '',
+    activityName: '',
+    projectName: '',
+    location: '',
+    estimatedBudget: '',
+    justification: '',
+    zoomLink: '',
+    reqs: {} as Record<string, boolean>
+  });
+
+  // Multiple Pokir Proposers state
+  const [pokirList, setPokirList] = useState<string[]>([]);
+  const [newPokirInput, setNewPokirInput] = useState('');
+
+  const [attachments, setAttachments] = useState<{ name: string; url: string; size?: string; type?: string; uploadedAt?: string }[]>([]);
+
+  const handleAddPokir = () => {
+    if (!newPokirInput.trim()) return;
+    const name = newPokirInput.trim();
+    if (!pokirList.includes(name)) {
+      setPokirList([...pokirList, name]);
+    }
+    setNewPokirInput('');
+  };
+
+  const handleRemovePokir = (index: number) => {
+    setPokirList(pokirList.filter((_, i) => i !== index));
+  };
 
   const openExternalLink = (rawUrl?: string) => {
     if (!rawUrl) {
@@ -42,7 +89,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     }
     let url = rawUrl.trim();
     if (url.match(/^(\d{1,3}\.){3}\d{1,3}$/) || url.includes('0.0.7.234') || url === '0.0.7.234') {
-      alert(`Tautan folder tidak valid (${url}). Harap masukkan tautan Google Drive yang valid (contoh: https://drive.google.com/drive/folders/...).`);
+      alert(`Tautan folder tidak valid (${url}). Harap masukkan tautan Google Drive yang valid.`);
       return;
     }
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -55,22 +102,6 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       alert(`Format tautan tidak valid: ${rawUrl}`);
     }
   };
-
-  // Form State
-  const [formData, setFormData] = useState({
-    tahunUsulan: '2025',
-    jenisUsulan: '',
-    programName: '',
-    activityName: '',
-    projectName: '',
-    location: '',
-    estimatedBudget: '',
-    justification: '',
-    zoomLink: '',
-    reqs: {} as Record<string, boolean>
-  });
-
-  const [attachments, setAttachments] = useState<{ name: string; url: string; size?: string; type?: string; uploadedAt?: string }[]>([]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -97,27 +128,71 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const renderStatusBadge = (status?: string) => {
     switch (status) {
       case 'diterima':
-        return <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200"><CheckCircle className="w-3 h-3" /> Diterima</span>;
+        return <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-green-200"><CheckCircle className="w-3 h-3" /> Diterima Teknis</span>;
       case 'belum_lengkap':
-        return <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-200"><AlertTriangle className="w-3 h-3" /> Belum Lengkap</span>;
+        return <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-amber-200"><AlertTriangle className="w-3 h-3" /> Belum Lengkap</span>;
       case 'revisi':
-        return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
+        return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
       case 'ditolak':
-        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
+        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
       default:
-        return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
+        return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
+    }
+  };
+
+  const renderSipdBadge = (sipdStatus?: string, regNo?: string) => {
+    switch (sipdStatus) {
+      case 'siap_sipd':
+        return (
+          <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-emerald-300">
+            <ShieldCheck className="w-3 h-3" /> Siap Input SIPD
+          </span>
+        );
+      case 'sudah_sipd':
+        return (
+          <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-300">
+            <CheckCircle className="w-3 h-3" /> Terdaftar SIPD {regNo ? `(${regNo})` : ''}
+          </span>
+        );
+      case 'ditolak_sipd':
+        return (
+          <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-rose-300">
+            <XCircle className="w-3 h-3" /> Tidak Memenuhi Syarat SIPD
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-xs font-medium border border-slate-200">
+            <Clock className="w-3 h-3 text-slate-500" /> Pra-SIPD (Draft)
+          </span>
+        );
     }
   };
 
   useEffect(() => {
-    const fetchConfigs = async () => {
-      const data = await getAllBidangConfigs();
-      setConfigs(data);
-      if (!selectedBidangId && data.length > 0) {
-        handleBidangSelect(data[0].id);
+    const fetchData = async () => {
+      try {
+        const [configsData, wData] = await Promise.all([
+          getAllBidangConfigs(),
+          getNagekeoWilayah()
+        ]);
+        setConfigs(configsData);
+        setWilayahList(wData);
+        if (!selectedBidangId && configsData.length > 0) {
+          handleBidangSelect(configsData[0].id);
+        }
+        if (wData.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            kecamatan: prev.kecamatan || wData[0].kecamatan,
+            desa: prev.desa || (wData[0].desaList[0] || '')
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to load initial data', err);
       }
     };
-    fetchConfigs();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -127,6 +202,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       if (config) {
         setTempSheetId(config.sheetId || '');
         setTempFolderUrl(config.folderUrl || '');
+        // Auto set default sumber usulan based on unit selected
+        if (config.id === 'POKIR (DPRD)') {
+          setFormData(prev => ({ ...prev, sumberUsulan: 'POKIR (DPRD)' }));
+        } else if (config.id === 'RENJA (OPD/Dinas)') {
+          setFormData(prev => ({ ...prev, sumberUsulan: 'RENJA Perangkat Daerah / OPD' }));
+        } else if (config.id === 'Kecamatan') {
+          setFormData(prev => ({ ...prev, sumberUsulan: 'Musrenbang Kecamatan' }));
+        } else if (config.id === 'Desa' || config.id === 'Kelurahan / Lurah') {
+          setFormData(prev => ({ ...prev, sumberUsulan: 'Musrenbang Desa / Kelurahan' }));
+        }
       }
       setEditingConfig(false);
       fetchProposals(config?.sheetId);
@@ -137,44 +222,6 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     proposalsRef.current = proposals;
   }, [proposals]);
 
-  useEffect(() => {
-    if (!selectedConfig?.sheetId) return;
-
-    const checkNewData = async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) return;
-        const rows = await getRows(token, selectedConfig.sheetId, 'Proposals!A2:B');
-        if (rows && rows.length > 0) {
-          const isLengthChanged = rows.length !== proposalsRef.current.length;
-          const lastRowId = rows[rows.length - 1]?.[0];
-          const currentFirstId = proposalsRef.current[0]?.id;
-          if (isLengthChanged || (lastRowId && currentFirstId && lastRowId !== currentFirstId)) {
-            if (proposalsRef.current.length > 0) {
-              setHasNewData(true);
-            }
-          }
-        }
-        
-        // Also silently check if config (Pagu/Rules) changed
-        const latestConfigs = await getAllBidangConfigs();
-        const currentSelectedId = selectedConfig?.id;
-        if (currentSelectedId) {
-          const latestSelected = latestConfigs.find(c => c.id === currentSelectedId);
-          if (latestSelected && JSON.stringify(latestSelected) !== JSON.stringify(selectedConfig)) {
-             setConfigs(latestConfigs);
-             setSelectedConfig(latestSelected);
-          }
-        }
-      } catch (err) {
-        // silent fail on background check
-      }
-    };
-
-    const interval = setInterval(checkNewData, 10000);
-    return () => clearInterval(interval);
-  }, [selectedConfig?.sheetId, selectedConfig?.id, selectedConfig?.pagu]);
-
   const handleRefreshData = async () => {
     setIsRefreshing(true);
     setHasNewData(false);
@@ -184,11 +231,11 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         const data = await getAllBidangConfigs();
         setConfigs(data);
         if (selectedBidangId) {
-           const updatedConfig = data.find(c => c.id === selectedBidangId);
-           if (updatedConfig) {
-             setSelectedConfig(updatedConfig);
-             currentSheetId = updatedConfig.sheetId;
-           }
+          const updatedConfig = data.find(c => c.id === selectedBidangId);
+          if (updatedConfig) {
+            setSelectedConfig(updatedConfig);
+            currentSheetId = updatedConfig.sheetId;
+          }
         }
       } catch (err) {
         console.error('Failed to refresh configs', err);
@@ -196,10 +243,10 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
       if (currentSheetId) {
         await fetchProposals(currentSheetId);
-        setSuccessMsg('Data tabel dan pagu berhasil disegarkan!');
-        setTimeout(() => setSuccessMsg(null), 3500);
+        setSuccessMsg('Data usulan & pagu berhasil disegarkan!');
+        setTimeout(() => setSuccessMsg(null), 3000);
       } else {
-        alert('Tidak dapat memuat data tabel karena ID Google Sheet belum diatur untuk bidang ini.');
+        alert('ID Google Sheet belum dikonfigurasi.');
       }
     } finally {
       setIsRefreshing(false);
@@ -246,12 +293,18 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:Q');
+      const rows = await getRows(token, sheetId, 'Proposals!A2:X');
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
         let atts = [];
         try { atts = JSON.parse(r[15] || '[]'); } catch (e) {}
+        let pokirArr: string[] = [];
+        try { 
+          if (r[20]) {
+            pokirArr = r[20].startsWith('[') ? JSON.parse(r[20]) : r[20].split(',').map((s: string) => s.trim());
+          }
+        } catch (e) {}
         
         return {
           id: r[0],
@@ -271,7 +324,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           status: (r[13] as any) || 'pending',
           adminNotes: r[14] || '',
           attachments: atts,
-          jenisUsulan: r[16]
+          jenisUsulan: r[16],
+          sumberUsulan: r[17] || '',
+          kecamatan: r[18] || '',
+          desa: r[19] || '',
+          pengusulPokir: pokirArr,
+          sipdStatus: (r[21] as SipdStatus) || 'draft',
+          sipdRegistrationNo: r[22] || '',
+          sipdNotes: r[23] || ''
         } as Proposal;
       });
       
@@ -287,17 +347,12 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Refresh config first to ensure we have the latest sheetId
     const latestConfigs = await getAllBidangConfigs();
     const currentConfig = latestConfigs.find(c => c.id === selectedBidangId) || null;
-    if (currentConfig) {
-      setConfigs(latestConfigs);
-      setSelectedConfig(currentConfig);
-    }
     const configToUse = currentConfig || selectedConfig;
 
     if (!configToUse?.sheetId) {
-      alert("Spreadsheet belum dikonfigurasi oleh Admin untuk bidang ini.");
+      alert("Spreadsheet belum dikonfigurasi oleh Admin untuk unit/bidang ini.");
       return;
     }
 
@@ -309,8 +364,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       if (rule) {
         const maxAllowed = (configToUse.pagu * rule.maxPercentage) / 100;
         if (numericBudget > maxAllowed) {
-          alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) melebihi batasan maksimal untuk program "${rule.programName}" (${rule.maxPercentage}% dari Pagu = ${formatRupiah(maxAllowed)}) yang ditentukan oleh Admin.`);
-          setIsSubmitting(false);
+          alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) melebihi batasan maksimal untuk program "${rule.programName}" (${rule.maxPercentage}% dari Pagu = ${formatRupiah(maxAllowed)}) yang ditentukan.`);
           return;
         }
       }
@@ -325,34 +379,51 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const id = uuidv4().substring(0, 8);
       
       const rowData = [
-        id,
-        timestamp,
-        formData.tahunUsulan,
-        formData.programName,
-        formData.activityName,
-        formData.projectName,
-        formData.location,
-        numericBudget,
-        formData.justification,
-        formData.zoomLink,
-        JSON.stringify(formData.reqs),
-        userName || userEmail,
-        configToUse?.folderUrl || '',
-        'pending',
-        '',
-        JSON.stringify(attachments),
-        formData.jenisUsulan
+        id,                                // 0: ID
+        timestamp,                         // 1: Timestamp
+        formData.tahunUsulan,              // 2: Tahun Usulan
+        formData.programName,              // 3: Program Name
+        formData.activityName,             // 4: Activity Name
+        formData.projectName,              // 5: Project Name
+        formData.location,                 // 6: Location
+        numericBudget,                     // 7: Estimated Budget
+        formData.justification,            // 8: Justification
+        formData.zoomLink,                 // 9: Zoom Link
+        JSON.stringify(formData.reqs),     // 10: Requirements Met
+        userName || userEmail,             // 11: Submitter
+        configToUse?.folderUrl || '',      // 12: Folder URL
+        'pending',                         // 13: Status
+        '',                                // 14: Admin Notes
+        JSON.stringify(attachments),       // 15: Attachments
+        formData.jenisUsulan,              // 16: Jenis Usulan
+        formData.sumberUsulan,             // 17: Sumber Usulan
+        formData.kecamatan,                // 18: Kecamatan
+        formData.desa,                     // 19: Desa / Kelurahan
+        JSON.stringify(pokirList),         // 20: Pengusul Pokir
+        'draft',                           // 21: Status SIPD (Default draft pra-sipd)
+        '',                                // 22: No Registrasi SIPD
+        ''                                 // 23: Catatan SIPD
       ];
 
-      await appendRow(token, configToUse.sheetId, 'Proposals!A:Q', rowData);
+      await appendRow(token, configToUse.sheetId, 'Proposals!A:X', rowData);
       
-      // Notify Admin
       await notifyAdminNewProposal();
 
       setShowForm(false);
-      setFormData({ tahunUsulan: '2025', jenisUsulan: '', programName: '', activityName: '', projectName: '', location: '', estimatedBudget: '', justification: '', zoomLink: '', reqs: {} });
+      setFormData(prev => ({
+        ...prev,
+        projectName: '',
+        location: '',
+        estimatedBudget: '',
+        justification: '',
+        zoomLink: '',
+        reqs: {}
+      }));
+      setPokirList([]);
       setAttachments([]);
       fetchProposals(configToUse.sheetId);
+      setSuccessMsg('Usulan berhasil dikirim sebagai data pra-SIPD!');
+      setTimeout(() => setSuccessMsg(null), 3500);
     } catch (err) {
       console.error('Submit failed', err);
       alert(`Gagal mengirim usulan: ${err instanceof Error ? err.message : String(err)}`);
@@ -364,18 +435,45 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const toggleReq = (reqId: string) => {
     setFormData(prev => ({ ...prev, reqs: { ...prev.reqs, [reqId]: !prev.reqs[reqId] } }));
   };
-  
+
+  // Find desas for current selected kecamatan in form
+  const currentKecDesaList = wilayahList.find(k => k.kecamatan === formData.kecamatan)?.desaList || [];
+
+  // Filtered proposals
+  const filteredProposals = proposals.filter(p => {
+    if (filterKecamatan !== 'ALL' && p.kecamatan !== filterKecamatan) return false;
+    if (filterDesa !== 'ALL' && p.desa !== filterDesa) return false;
+    if (filterSumber !== 'ALL' && p.sumberUsulan !== filterSumber) return false;
+    if (filterSipd !== 'ALL' && (p.sipdStatus || 'draft') !== filterSipd) return false;
+    if (filterSearch.trim()) {
+      const q = filterSearch.toLowerCase();
+      const matchProject = (p.projectName || '').toLowerCase().includes(q);
+      const matchLocation = (p.location || '').toLowerCase().includes(q);
+      const matchDesa = (p.desa || '').toLowerCase().includes(q);
+      const matchKec = (p.kecamatan || '').toLowerCase().includes(q);
+      const matchPokir = Array.isArray(p.pengusulPokir) && p.pengusulPokir.some(pok => pok.toLowerCase().includes(q));
+      if (!matchProject && !matchLocation && !matchDesa && !matchKec && !matchPokir) return false;
+    }
+    return true;
+  });
+
   const totalBudget = proposals.reduce((sum, p) => sum + p.estimatedBudget, 0);
+  const siapSipdCount = proposals.filter(p => p.sipdStatus === 'siap_sipd' || p.sipdStatus === 'sudah_sipd').length;
 
   return (
     <div className="space-y-6">
       <IndependenceDayBanner />
       <header className="flex flex-col sm:flex-row sm:items-center justify-between shadow-sm bg-white border-b border-slate-200 -mx-8 -mt-8 px-8 py-5 mb-8">
         <div className="flex flex-col">
-          <h2 className="text-xl font-extrabold text-slate-800">Dashboard Usulan Rencana Kerja</h2>
-          <p className="text-sm text-slate-500">Tahun Anggaran 2025 &bull; Kab. Nagekeo</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-extrabold text-slate-800">Dashboard Usulan Rencana Kerja (e-URK)</h2>
+            <span className="bg-blue-100 text-blue-800 text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full">
+              Filterisasi Pra-SIPD
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">Kab. Nagekeo &bull; 7 Kecamatan & 115+ Desa/Kelurahan &bull; Musrenbang, Pokir & Renja</p>
         </div>
-        <div className="flex items-center gap-4 mt-4 sm:mt-0">
+        <div className="flex items-center flex-wrap gap-3 mt-4 sm:mt-0">
           <select 
             value={selectedBidangId}
             onChange={e => handleBidangSelect(e.target.value)}
@@ -391,217 +489,227 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
           <button
             onClick={() => window.open('https://meet.google.com/new', '_blank')}
-            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-emerald-200 shadow-sm"
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-emerald-200 shadow-sm text-xs"
             title="Buka Google Meet untuk Diskusi & Berbagi Layar"
           >
-            <Video className="w-5 h-5 text-emerald-600" /> Buka Google Meet
+            <Video className="w-4 h-4 text-emerald-600" /> Meet
           </button>
 
-          {selectedConfig?.folderUrl && (
-            <a 
-              href={selectedConfig.folderUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-indigo-100"
-              title="Unggah berkas persyaratan ke Google Drive Bidang"
-            >
-              <ExternalLink className="w-5 h-5" /> Upload Dokumen
-            </a>
-          )}
+          <button
+            onClick={() => printRekapanSiapSIPD(filteredProposals, `${selectedConfig?.name || 'Unit'} - Filter Aktif`)}
+            disabled={filteredProposals.length === 0}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm text-xs disabled:opacity-50"
+            title="Cetak format rekapitulasi usulan yang telah terverifikasi/siap input ke SIPD"
+          >
+            <Printer className="w-4 h-4" /> Cetak Pra-SIPD
+          </button>
 
           <button
-            onClick={() => {
-              if (!selectedConfig) return;
-              printRekapanDisetujui(
-                selectedConfig.name,
-                NON_BIDANG_UNITS.includes(selectedConfig.id),
-                proposals,
-                selectedConfig.pagu || 0
-              );
-            }}
-            disabled={!selectedConfig || proposals.filter(p => p.status === 'diterima').length === 0}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Cetak Rekapitulasi Usulan yang Disetujui (Format PDF/Cetak)"
+            onClick={() => exportCsvSIPD(filteredProposals, `rekap_usulan_${selectedConfig?.id || 'all'}_pra_sipd.csv`)}
+            disabled={filteredProposals.length === 0}
+            className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm text-xs disabled:opacity-50"
+            title="Ekspor data usulan ke format CSV/Excel untuk mempermudah input ke SIPD"
           >
-            <Printer className="w-4 h-4" />
-            <span>Cetak Rekap Disetujui ({proposals.filter(p => p.status === 'diterima').length})</span>
+            <Download className="w-4 h-4" /> Export CSV
           </button>
 
           <button
             onClick={handleRefreshData}
             disabled={isRefreshing}
-            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-blue-200 shadow-sm"
-            title="Segarkan data tabel langsung tanpa perlu login ulang atau reload browser"
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border border-blue-200 shadow-sm text-xs"
+            title="Segarkan data tabel langsung"
           >
             <RefreshCw className={`w-4 h-4 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Memperbarui...' : 'Segarkan Data'}</span>
+            <span>{isRefreshing ? 'Memperbarui...' : 'Segarkan'}</span>
           </button>
 
           <button
             onClick={() => setShowForm(!showForm)}
             disabled={!selectedConfig?.sheetId}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-md transition-all text-xs disabled:opacity-50"
           >
-            {showForm ? 'Batal' : <><Plus className="w-5 h-5" /> Usulan Baru</>}
+            {showForm ? 'Batal' : <><Plus className="w-4 h-4" /> Tambah Usulan</>}
           </button>
         </div>
       </header>
 
-      {hasNewData && (
-        <div className="mb-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse border-2 border-blue-400">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg shrink-0">🔔</div>
-            <div>
-              <p className="font-extrabold text-sm sm:text-base">Ada data baru masuk atau pembaruan pada usulan!</p>
-              <p className="text-xs text-blue-100">Klik tombol segarkan di kanan untuk memperbarui tampilan tabel langsung tanpa reload browser & login ulang.</p>
-            </div>
-          </div>
-          <button
-            onClick={handleRefreshData}
-            className="bg-white text-blue-700 hover:bg-blue-50 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 shrink-0"
-          >
-            <RefreshCw className="w-4 h-4" /> Segarkan Data Sekarang
-          </button>
-        </div>
-      )}
-
       {successMsg && (
-        <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200 flex items-center justify-between">
+        <div className="p-4 bg-green-50 text-green-700 rounded-xl text-xs font-bold border border-green-200 flex items-center justify-between shadow-sm">
           {successMsg}
-          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700">✕</button>
-        </div>
-      )}
-
-      {/* Info Banner on File Upload & Google Meet */}
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-6 text-blue-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Info className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
-          <div className="text-sm space-y-1">
-            <p className="font-bold">Informasi Penyimpanan Berkas & Google Meet</p>
-            <p className="text-blue-700">
-              📁 Berkas persyaratan diunggah langsung ke <b>Google Drive Folder</b> masing-masing bidang (klik tombol <b>Upload Dokumen</b> di atas). 
-              🎥 Gunakan tombol <b>Buka Google Meet</b> untuk memulai rapat video instan dan berbagi layar saat diskusi usulan.
-            </p>
-          </div>
-        </div>
-        {selectedConfig?.folderUrl && (
-          <a
-            href={selectedConfig.folderUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-          >
-            <ExternalLink className="w-4 h-4" /> Buka Folder Drive
-          </a>
-        )}
-      </div>
-
-      {/* Config Form if missing or editing */}
-      {selectedConfig && (!selectedConfig.sheetId || editingConfig) && (
-        <div className="bg-amber-50 rounded-2xl shadow-sm border border-amber-200 p-6 mb-6">
-          <h3 className="text-amber-900 font-bold mb-2">Konfigurasi Bidang {selectedConfig.name}</h3>
-          <p className="text-amber-700 text-sm mb-4">
-            Tautkan Google Sheet untuk menyimpan data usulan bidang ini. Tautan ini akan terhubung ke Admin.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-bold text-amber-800 mb-1">Spreadsheet ID atau Link</label>
-              <input 
-                type="text" 
-                value={tempSheetId} 
-                onChange={e => setTempSheetId(e.target.value)} 
-                placeholder="ID Google Sheet atau Tempel URL"
-                className="w-full border border-amber-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-amber-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-amber-800 mb-1">Folder Drive URL (Opsional)</label>
-              <input 
-                type="text" 
-                value={tempFolderUrl} 
-                onChange={e => setTempFolderUrl(e.target.value)} 
-                placeholder="Link Folder Google Drive"
-                className="w-full border border-amber-300 bg-white rounded-lg px-3 py-2 outline-none focus:border-amber-500 text-sm"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            {editingConfig && selectedConfig.sheetId && (
-              <button onClick={() => setEditingConfig(false)} className="px-4 py-2 text-amber-800 font-medium text-sm hover:bg-amber-100 rounded-lg">
-                Batal
-              </button>
-            )}
-            <button onClick={handleSaveConfig} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2">
-              <Save className="w-4 h-4" /> Simpan Konfigurasi
-            </button>
-          </div>
+          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700 font-bold">&times;</button>
         </div>
       )}
 
       {/* Overview Stats */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-blue-500">
-          <div className="flex justify-between items-start mb-1">
-            <p className="text-slate-500 text-xs font-bold uppercase">Total Usulan Bidang</p>
-            {selectedConfig?.sheetId && !editingConfig && (
-              <button onClick={() => setEditingConfig(true)} className="text-slate-400 hover:text-blue-600" title="Edit Konfigurasi">
-                <Edit2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <div className="flex items-end justify-between">
-            <span className="text-3xl font-black text-slate-800">{proposals.length}</span>
-            <span className="text-blue-500 text-xs font-bold">Terdaftar</span>
+      <section className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-blue-500">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Usulan Ditampung</p>
+          <div className="flex items-end justify-between mt-1">
+            <span className="text-2xl font-black text-slate-800">{proposals.length}</span>
+            <span className="text-blue-500 text-xs font-bold">Penampung Pra-SIPD</span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-yellow-400">
-          <p className="text-slate-500 text-xs font-bold uppercase mb-1">Total Anggaran Diusulkan</p>
-          <div className="flex items-end justify-between">
-            <span className="text-xl sm:text-2xl font-black text-slate-800">
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-emerald-500">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Siap / Masuk SIPD</p>
+          <div className="flex items-end justify-between mt-1">
+            <span className="text-2xl font-black text-emerald-700">{siapSipdCount}</span>
+            <span className="text-emerald-600 text-xs font-bold">Terverifikasi</span>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-yellow-400">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Anggaran Usulan</p>
+          <div className="flex items-end justify-between mt-1">
+            <span className="text-lg font-black text-slate-800 truncate">
               {formatRupiah(totalBudget)}
             </span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-purple-500">
-          <p className="text-slate-500 text-xs font-bold uppercase mb-1">Pagu Indikatif (Batas)</p>
-          <div className="flex items-end justify-between">
-            <span className="text-xl sm:text-2xl font-black text-slate-800">
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-b-4 border-b-purple-500">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Pagu Indikatif Wilayah</p>
+          <div className="flex items-end justify-between mt-1">
+            <span className="text-lg font-black text-slate-800 truncate">
               {formatRupiah(selectedConfig?.pagu || 0)}
             </span>
-            <span className={`text-xs font-bold ${totalBudget > (selectedConfig?.pagu || 0) ? 'text-red-500' : 'text-green-500'}`}>
-              {totalBudget > (selectedConfig?.pagu || 0) ? 'Over Budget' : 'Aman'}
+            <span className={`text-[10px] font-bold ${totalBudget > (selectedConfig?.pagu || 0) ? 'text-red-500' : 'text-green-500'}`}>
+              {totalBudget > (selectedConfig?.pagu || 0) ? 'Over Pagu' : 'Aman'}
             </span>
           </div>
         </div>
       </section>
 
+      {/* FORM USULAN BARU */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-            <h3 className="font-semibold text-slate-900">Form Usulan Baru</h3>
+        <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-slate-100 bg-blue-50/70 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-blue-600" />
+              <h3 className="font-bold text-slate-900">Form Usulan Baru (Pra-SIPD) - {selectedConfig?.name}</h3>
+            </div>
+            <span className="text-xs font-semibold text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
+              Kabupaten Nagekeo
+            </span>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Tahun Usulan *</label>
-                <input required type="text" value={formData.tahunUsulan} onChange={e => setFormData({...formData, tahunUsulan: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                <label className="text-xs font-bold text-slate-700">Tahun Usulan *</label>
+                <input required type="text" value={formData.tahunUsulan} onChange={e => setFormData({...formData, tahunUsulan: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
               </div>
+
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Jenis Usulan *</label>
-                <select required value={formData.jenisUsulan} onChange={e => setFormData({...formData, jenisUsulan: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
-                  <option value="">Pilih Jenis</option>
+                <label className="text-xs font-bold text-slate-700">Jenis Usulan *</label>
+                <select required value={formData.jenisUsulan} onChange={e => setFormData({...formData, jenisUsulan: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
                   <option value="Baru">Baru</option>
                   <option value="Lanjutan">Lanjutan</option>
+                  <option value="Rehabilitasi">Rehabilitasi / Pemeliharaan</option>
                 </select>
               </div>
+
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Nama Program *</label>
+                <label className="text-xs font-bold text-slate-700">Sumber Usulan *</label>
+                <select 
+                  required 
+                  value={formData.sumberUsulan} 
+                  onChange={e => setFormData({...formData, sumberUsulan: e.target.value})} 
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-blue-900 bg-blue-50/50"
+                >
+                  {SUMBER_USULAN_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* WILAYAH: KECAMATAN & DESA SE-KAB NAGEKEO */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Kecamatan (Kab. Nagekeo) *
+                </label>
+                <select
+                  required
+                  value={formData.kecamatan}
+                  onChange={e => {
+                    const newKec = e.target.value;
+                    const defaultDesa = wilayahList.find(k => k.kecamatan === newKec)?.desaList[0] || '';
+                    setFormData({ ...formData, kecamatan: newKec, desa: defaultDesa });
+                  }}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
+                >
+                  <option value="" disabled>Pilih Kecamatan</option>
+                  {wilayahList.map(k => (
+                    <option key={k.kecamatan} value={k.kecamatan}>Kecamatan {k.kecamatan}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Desa / Kelurahan *
+                </label>
+                <select
+                  required
+                  value={formData.desa}
+                  onChange={e => setFormData({...formData, desa: e.target.value})}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
+                >
+                  <option value="" disabled>Pilih Desa/Kelurahan</option>
+                  {currentKecDesaList.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Lokasi Spesifik / Dusun / RT *</label>
+                <input required type="text" placeholder="Contoh: Dusun 2, RT 04 / Ruas Jl. Danga" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+
+              {/* POKIR MULTIPLE PENGUSUL SECTION */}
+              {(formData.sumberUsulan === 'POKIR (DPRD)' || selectedBidangId === 'POKIR (DPRD)') && (
+                <div className="md:col-span-3 bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-purple-700" /> Nama-Nama Pengusul Pokir (Anggota DPRD / Fraksi):
+                    </label>
+                    <span className="text-[10px] text-purple-700 font-semibold">Bisa input lebih dari satu nama pengusul</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newPokirInput}
+                      onChange={e => setNewPokirInput(e.target.value)}
+                      placeholder="Masukkan nama Anggota Dewan / Fraksi / Dapil..."
+                      className="flex-1 border border-purple-300 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddPokir(); } }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPokir}
+                      className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      + Tambah Pengusul
+                    </button>
+                  </div>
+                  {pokirList.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {pokirList.map((pok, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1.5 bg-white border border-purple-300 text-purple-900 px-3 py-1 rounded-full text-xs font-bold shadow-2xs">
+                          <span>{pok}</span>
+                          <button type="button" onClick={() => handleRemovePokir(idx)} className="text-purple-400 hover:text-red-600 font-bold">&times;</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Nama Program *</label>
                 {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 ? (
                   <select 
                     required 
                     value={formData.programName} 
                     onChange={e => setFormData({...formData, programName: e.target.value})} 
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
                     <option value="">Pilih Program</option>
                     {selectedConfig.budgetRules.map((rule, idx) => (
@@ -609,106 +717,62 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                     ))}
                   </select>
                 ) : (
-                  <input required type="text" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                  <input required type="text" placeholder="Contoh: Program Pengelolaan SDA" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 )}
               </div>
+
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Nama Kegiatan</label>
-                <input type="text" value={formData.activityName} onChange={e => setFormData({...formData, activityName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Nama Proyek / Pekerjaan *</label>
-                <input required type="text" value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Lokasi Pekerjaan *</label>
-                <input required type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Estimasi Anggaran (Rp) *</label>
-                <input required type="text" placeholder="Contoh: 50000000" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-                <p className="text-xs text-slate-500 mt-1">Masukkan nominal angka (misal: 35000000 atau 50.000.000)</p>
+                <label className="text-xs font-bold text-slate-700">Nama Kegiatan</label>
+                <input type="text" placeholder="Contoh: Pembangunan Saluran Irigasi Tersier" value={formData.activityName} onChange={e => setFormData({...formData, activityName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 && (
-                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-                  <p className="font-bold mb-1">Informasi Batasan Anggaran Program dari Admin:</p>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    {selectedConfig.budgetRules.map((rule, idx) => (
-                      <li key={idx}>
-                        <strong>{rule.programName}</strong>: Maksimal {rule.maxPercentage}% dari Pagu (Pagu: {formatRupiah(selectedConfig.pagu)} → Maks: {formatRupiah((selectedConfig.pagu * rule.maxPercentage) / 100)})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-sm font-medium text-slate-700">Justifikasi / Urgensi *</label>
-                <textarea required rows={3} value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                      <Folder className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-indigo-900">Folder Google Drive Bidang (Terdaftar Otomatis)</p>
-                      <p className="text-xs text-indigo-700 truncate max-w-md">
-                        {selectedConfig?.folderUrl || 'Belum diatur di konfigurasi bidang'}
-                      </p>
-                    </div>
-                  </div>
-                  {selectedConfig?.folderUrl && (
-                    <button
-                      type="button"
-                      onClick={() => openExternalLink(selectedConfig.folderUrl)}
-                      className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" /> Buka Folder
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500">Tautan folder Google Drive tidak perlu dimasukkan berulang kali. Cukup unggah berkas di bawah sesuai nama usulan.</p>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Estimasi Anggaran (Rp) *</label>
+                <input required type="text" placeholder="Contoh: 150000000" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-blue-900" />
               </div>
 
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                  <Folder className="w-4 h-4 text-indigo-600" /> Upload Berkas / Dokumen Pendukung Langsung dari Aplikasi (PDF, Excel, Word, dll)
+              <div className="md:col-span-3 space-y-1">
+                <label className="text-xs font-bold text-slate-700">Nama Usulan / Pekerjaan Fisik *</label>
+                <input required type="text" placeholder="Contoh: Pembangunan Tembok Penahan Tanah dan Rabat Beton Desa Aeramo" value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+              </div>
+
+              <div className="md:col-span-3 space-y-1">
+                <label className="text-xs font-bold text-slate-700">Justifikasi / Urgensi Kebutuhan (Indikator Kelayakan) *</label>
+                <textarea required rows={3} placeholder="Jelaskan kondisi saat ini, manfaat langsung bagi masyarakat, dan urgensi penanganan..." value={formData.justification} onChange={e => setFormData({...formData, justification: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+
+              <div className="md:col-span-3 space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Folder className="w-4 h-4 text-indigo-600" /> Upload Berkas / Proposal Pendukung (PDF, Word, Excel, Gambar)
                 </label>
                 <input 
                   type="file" 
                   multiple 
                   onChange={handleFileUpload}
-                  className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  className="w-full border border-slate-300 rounded-xl p-2 text-xs bg-white file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                 />
                 {attachments.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs font-bold text-slate-700">Berkas yang akan diunggah:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {attachments.map((att, idx) => (
-                        <div key={idx} className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg text-xs font-medium text-indigo-900">
-                          <span>{att.name} ({att.size})</span>
-                          <button type="button" onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 font-bold">&times;</button>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {attachments.map((att, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg text-xs font-medium text-indigo-900">
+                        <span>{att.name} ({att.size})</span>
+                        <button type="button" onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
 
             <div className="pt-4 border-t border-slate-100">
-              <h4 className="font-medium text-slate-900 mb-4">Syarat & Dokumen Pendukung ({selectedConfig ? selectedConfig.name : 'Standar Admin'})</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <h4 className="font-bold text-slate-900 mb-3 text-sm">Syarat & Kesiapan Dokumen ({selectedConfig ? selectedConfig.name : 'Standar'})</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {activeRequirements.map((req) => (
-                  <label key={req.id} className="flex items-start gap-3 p-4 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <input type="checkbox" checked={formData.reqs[req.id] || false} onChange={() => toggleReq(req.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500" />
-                    </div>
+                  <label key={req.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                    <input type="checkbox" checked={formData.reqs[req.id] || false} onChange={() => toggleReq(req.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 mt-0.5" />
                     <div>
-                      <div className="text-sm font-medium text-slate-900">{req.label}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{req.description}</div>
+                      <div className="text-xs font-bold text-slate-900">{req.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{req.description}</div>
                     </div>
                   </label>
                 ))}
@@ -716,235 +780,295 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-slate-700 font-medium hover:bg-slate-100 rounded-lg transition-colors">Batal</button>
-              <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50">
-                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isSubmitting ? 'Mengirim...' : 'Kirim Usulan'}
+              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-slate-700 text-xs font-bold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
+              <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50">
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Kirim Usulan ke Penampung Pra-SIPD
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* List of Proposals */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="py-12 flex flex-col items-center justify-center text-slate-500">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
-            <p>Memuat usulan...</p>
+      {/* FILTER & PENCARIAN BAR */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-bold text-slate-800">Filter & Pemilahan Usulan Pra-SIPD</h3>
           </div>
-        ) : proposals.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Info className="w-8 h-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900">Belum Ada Usulan</h3>
-            <p className="text-slate-500 mt-1 max-w-sm mx-auto">
-              Daftar usulan kosong. Klik tombol Usulan Baru untuk memulai.
-            </p>
+          <span className="text-xs text-slate-500">
+            Menampilkan <strong>{filteredProposals.length}</strong> dari <strong>{proposals.length}</strong> usulan
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cari Kata Kunci</label>
+            <input
+              type="text"
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              placeholder="Cari proyek / desa / pengusul..."
+              className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kecamatan</label>
+            <select
+              value={filterKecamatan}
+              onChange={e => {
+                setFilterKecamatan(e.target.value);
+                setFilterDesa('ALL');
+              }}
+              className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none text-slate-700"
+            >
+              <option value="ALL">Semua Kecamatan (7)</option>
+              {wilayahList.map(k => (
+                <option key={k.kecamatan} value={k.kecamatan}>Kec. {k.kecamatan}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desa / Kelurahan</label>
+            <select
+              value={filterDesa}
+              onChange={e => setFilterDesa(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none text-slate-700"
+            >
+              <option value="ALL">Semua Desa/Kelurahan</option>
+              {filterKecamatan === 'ALL'
+                ? wilayahList.flatMap(k => k.desaList).map(d => <option key={d} value={d}>{d}</option>)
+                : (wilayahList.find(k => k.kecamatan === filterKecamatan)?.desaList || []).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))
+              }
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sumber Usulan</label>
+            <select
+              value={filterSumber}
+              onChange={e => setFilterSumber(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none text-slate-700"
+            >
+              <option value="ALL">Semua Sumber Usulan</option>
+              {SUMBER_USULAN_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Kesiapan SIPD</label>
+            <select
+              value={filterSipd}
+              onChange={e => setFilterSipd(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none text-emerald-800 bg-emerald-50/50"
+            >
+              <option value="ALL">Semua Status SIPD</option>
+              <option value="draft">Pra-SIPD (Draft)</option>
+              <option value="siap_sipd">Siap Input ke SIPD</option>
+              <option value="sudah_sipd">Sudah Masuk SIPD</option>
+              <option value="ditolak_sipd">Ditolak / Tidak Layak</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* PROPOSALS TABLE */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900 text-sm">
+            Daftar Usulan Rencana Kerja ({filteredProposals.length} item)
+          </h3>
+          <span className="text-xs text-slate-500">
+            Penyimpanan: Google Sheet ({selectedConfig?.name || 'Unit'})
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="py-12 flex flex-col items-center justify-center text-slate-500 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <p className="text-xs font-semibold">Memuat usulan dari Google Sheets...</p>
+          </div>
+        ) : filteredProposals.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 text-sm">
+            Belum ada data usulan yang sesuai dengan kriteria filter.
           </div>
         ) : (
-          proposals.map((proposal) => {
-            const reqsMetCount = Object.values(proposal.requirementsMet || {}).filter(Boolean).length;
-            const totalReqs = activeRequirements.length;
-            
-            return (
-              <div key={proposal.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {new Date(proposal.submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      <span className="text-slate-300">&bull;</span>
-                      <span className="text-slate-500">Tahun Usulan: {proposal.tahunUsulan || 'N/A'}</span>
-                      <span className="text-slate-300">&bull;</span>
-                      <span className="text-slate-500">Oleh {proposal.submittedBy}</span>
-                      <span className="ml-auto">{renderStatusBadge(proposal.status)}</span>
-                    </div>
-
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="text-xl font-bold text-slate-800">{proposal.projectName}</h3>
-                      <button
-                        type="button"
-                        onClick={() => setActiveFolderProposal(proposal)}
-                        className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 transition-all shadow-sm"
-                        title="Kelola & Buka Dokumen / Folder"
-                      >
-                        <Folder className="w-4 h-4 text-indigo-600" /> Buka Dokumen & Folder
-                      </button>
-                    </div>
-
-                    {/* Attachments Display */}
-                    {proposal.attachments && proposal.attachments.length > 0 && (
-                      <div className="mt-3 mb-3 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                        <p className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1">
-                          <Folder className="w-3.5 h-3.5 text-indigo-600" /> Berkas Dokumen Diunggah dari Aplikasi ({proposal.attachments.length}):
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {proposal.attachments.map((att, idx) => (
-                            <a
-                              key={idx}
-                              href={att.url}
-                              download={att.name}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-900 transition-all shadow-sm"
-                            >
-                              <span>📄 {att.name}</span>
-                              {att.size && <span className="text-indigo-400 font-normal">({att.size})</span>}
-                            </a>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Nama Usulan & Program</th>
+                  <th className="py-3 px-4">Sumber & Wilayah</th>
+                  <th className="py-3 px-4">Pengusul / Pokir</th>
+                  <th className="py-3 px-4">Estimasi Anggaran</th>
+                  <th className="py-3 px-4">Evaluasi Teknis</th>
+                  <th className="py-3 px-4">Status Pra-SIPD</th>
+                  <th className="py-3 px-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProposals.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-900 max-w-xs">{p.projectName}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {p.programName ? `Prog: ${p.programName}` : ''} {p.activityName ? `• Keg: ${p.activityName}` : ''}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-blue-900">{p.sumberUsulan || p.jenisUsulan || 'Usulan Rencana'}</div>
+                      <div className="text-[11px] text-emerald-800 font-medium mt-0.5">
+                        {p.kecamatan ? `Kec. ${p.kecamatan}` : ''} {p.desa ? `• ${p.desa}` : ''}
+                      </div>
+                      <div className="text-[10px] text-slate-400">{p.location}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {Array.isArray(p.pengusulPokir) && p.pengusulPokir.length > 0 ? (
+                        <div className="space-y-1">
+                          {p.pengusulPokir.map((pok, i) => (
+                            <span key={i} className="inline-block bg-purple-50 text-purple-900 border border-purple-200 rounded px-2 py-0.5 text-[10px] font-bold mr-1 mb-1">
+                              {pok}
+                            </span>
                           ))}
                         </div>
-                      </div>
-                    )}
-
-                    {(proposal.programName || proposal.activityName) && (
-                      <p className="text-sm font-semibold text-slate-600 mb-2">
-                        {proposal.programName && `Program: ${proposal.programName}`}
-                        {proposal.programName && proposal.activityName && ` | `}
-                        {proposal.activityName && `Kegiatan: ${proposal.activityName}`}
-                      </p>
-                    )}
-                    <p className="text-sm text-slate-600 mb-4">{proposal.justification}</p>
-                    
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 mb-4">
-                      <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 font-medium">
-                        <MapPin className="w-4 h-4 text-slate-400" />
-                        {proposal.location}
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 font-medium">
-                        <DollarSign className="w-4 h-4 text-slate-400" />
-                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(proposal.estimatedBudget)}
-                        {selectedConfig?.pagu ? (
-                          <span className={`text-xs ml-1 ${proposal.estimatedBudget > selectedConfig.pagu ? 'text-red-500' : 'text-slate-500'}`}>
-                            ({((proposal.estimatedBudget / selectedConfig.pagu) * 100).toFixed(1)}% dari Pagu Bidang)
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-lg font-bold border border-green-100">
-                        {reqsMetCount} / {totalReqs} Syarat Lengkap
-                      </div>
-                    </div>
-
-                    {/* Admin Notes Display */}
-                    {proposal.adminNotes && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1">
-                        <div className="font-bold flex items-center gap-1.5 text-blue-800">
-                          <Info className="w-4 h-4" /> Catatan Admin / Evaluasi:
-                        </div>
-                        <p className="italic text-blue-900/90 pl-5">"{proposal.adminNotes}"</p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-shrink-0 flex flex-col justify-center min-w-[200px]">
-                    {proposal.zoomLink ? (
-                      <a 
-                        href={proposal.zoomLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-5 py-3 rounded-xl text-sm font-bold transition-all"
+                      ) : (
+                        <span className="text-slate-600 font-medium">{p.submittedBy}</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                      {formatRupiah(p.estimatedBudget)}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {renderStatusBadge(p.status)}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {renderSipdBadge(p.sipdStatus, p.sipdRegistrationNo)}
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => setSelectedProposalDetail(p)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                       >
-                        <Video className="w-5 h-5" />
-                        Gabung Google Meet
-                      </a>
-                    ) : (
-                      <div className="text-center px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm text-slate-500 font-medium">
-                        Menunggu Jadwal Meet dari Admin
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+                        Detail
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {activeFolderProposal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 space-y-6 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <Folder className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Kelola Dokumen & Folder</h3>
-                  <p className="text-xs text-slate-500 truncate max-w-xs">{activeFolderProposal.projectName}</p>
-                </div>
+      {/* DETAIL MODAL */}
+      {selectedProposalDetail && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                  ID: {selectedProposalDetail.id}
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">Detail Usulan Perencanaan</h3>
               </div>
-              <button
-                onClick={() => setActiveFolderProposal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold"
-              >
-                &times;
+              <button onClick={() => setSelectedProposalDetail(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Tautan Google Drive Folder:</p>
-                {activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl || ''}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-600 outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => openExternalLink(activeFolderProposal.documentFolderUrl || selectedConfig?.folderUrl)}
-                      className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" /> Buka Folder
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">Belum ada link Google Drive yang didaftarkan untuk usulan atau bidang ini.</p>
-                )}
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="col-span-2 bg-slate-50 p-3 rounded-xl">
+                <p className="text-slate-500 font-bold">Nama Proyek / Pekerjaan:</p>
+                <p className="text-sm font-bold text-slate-900 mt-0.5">{selectedProposalDetail.projectName}</p>
               </div>
 
               <div>
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
-                  Berkas Dokumen Diunggah dari Aplikasi ({activeFolderProposal.attachments?.length || 0}):
-                </p>
-                {activeFolderProposal.attachments && activeFolderProposal.attachments.length > 0 ? (
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {activeFolderProposal.attachments.map((att, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-all">
-                        <div className="flex items-center gap-2.5 overflow-hidden">
-                          <span className="text-lg">📄</span>
-                          <div className="overflow-hidden">
-                            <p className="text-xs font-bold text-slate-800 truncate">{att.name}</p>
-                            <p className="text-[10px] text-slate-400">{att.size || 'Berkas Dokumen'}</p>
-                          </div>
-                        </div>
-                        <a
-                          href={att.url}
-                          download={att.name}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" /> Unduh / Lihat
-                        </a>
-                      </div>
+                <p className="text-slate-500 font-bold">Sumber Usulan:</p>
+                <p className="font-bold text-blue-900">{selectedProposalDetail.sumberUsulan || '-'}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 font-bold">Estimasi Anggaran:</p>
+                <p className="font-bold text-slate-900 text-sm">{formatRupiah(selectedProposalDetail.estimatedBudget)}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 font-bold">Wilayah Kecamatan:</p>
+                <p className="font-bold text-emerald-800">{selectedProposalDetail.kecamatan || '-'}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 font-bold">Desa / Kelurahan:</p>
+                <p className="font-bold text-emerald-800">{selectedProposalDetail.desa || '-'}</p>
+              </div>
+
+              <div className="col-span-2">
+                <p className="text-slate-500 font-bold">Nama Pengusul / Pokir DPRD:</p>
+                {Array.isArray(selectedProposalDetail.pengusulPokir) && selectedProposalDetail.pengusulPokir.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedProposalDetail.pengusulPokir.map((pok, i) => (
+                      <span key={i} className="bg-purple-100 text-purple-900 px-2 py-0.5 rounded font-bold">
+                        {pok}
+                      </span>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
-                    <p className="text-xs text-slate-500 font-medium">Belum ada berkas dokumen yang diunggah langsung dari aplikasi untuk usulan ini.</p>
-                  </div>
+                  <p className="font-medium text-slate-800">{selectedProposalDetail.submittedBy || '-'}</p>
                 )}
               </div>
+
+              <div className="col-span-2">
+                <p className="text-slate-500 font-bold">Justifikasi / Urgensi Penanganan:</p>
+                <p className="text-slate-700 bg-slate-50 p-2.5 rounded-lg mt-1">{selectedProposalDetail.justification || '-'}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 font-bold">Status Evaluasi Teknis:</p>
+                <div className="mt-1">{renderStatusBadge(selectedProposalDetail.status)}</div>
+              </div>
+
+              <div>
+                <p className="text-slate-500 font-bold">Status Kesiapan SIPD:</p>
+                <div className="mt-1">{renderSipdBadge(selectedProposalDetail.sipdStatus, selectedProposalDetail.sipdRegistrationNo)}</div>
+              </div>
+
+              {selectedProposalDetail.adminNotes && (
+                <div className="col-span-2 bg-yellow-50 border border-yellow-200 p-3 rounded-xl">
+                  <p className="font-bold text-yellow-900">Catatan Verifikator / Admin:</p>
+                  <p className="text-yellow-800 mt-0.5">{selectedProposalDetail.adminNotes}</p>
+                </div>
+              )}
+
+              {selectedProposalDetail.attachments && selectedProposalDetail.attachments.length > 0 && (
+                <div className="col-span-2">
+                  <p className="text-slate-500 font-bold mb-1">Dokumen Lampiran ({selectedProposalDetail.attachments.length}):</p>
+                  <div className="space-y-1.5">
+                    {selectedProposalDetail.attachments.map((att, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-lg">
+                        <span className="font-medium truncate">{att.name}</span>
+                        {att.url && (
+                          <a href={att.url} download={att.name} className="text-blue-600 hover:text-blue-800 font-bold shrink-0 ml-2">
+                            Unduh
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-3 border-t border-slate-100">
               <button
-                onClick={() => setActiveFolderProposal(null)}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                onClick={() => setSelectedProposalDetail(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-xl text-xs font-bold"
               >
                 Tutup
               </button>

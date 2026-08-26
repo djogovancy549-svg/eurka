@@ -5,9 +5,19 @@ export const ADMIN_EMAILS = ['djogovancy549@gmail.com'];
 
 export const BIDANG_LIST = [
   'SDA', 'PL', 'CK', 'BM', 'Tata Ruang', 'Sekretariat',
-  'Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)'
+  'Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)', 'RENJA (OPD/Dinas)'
 ];
-export const NON_BIDANG_UNITS = ['Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)'];
+export const NON_BIDANG_UNITS = ['Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)', 'RENJA (OPD/Dinas)'];
+
+export const SUMBER_USULAN_OPTIONS = [
+  'Musrenbang Desa / Kelurahan',
+  'Musrenbang Kecamatan',
+  'POKIR (DPRD)',
+  'RENJA Perangkat Daerah / OPD',
+  'Bidang Teknis Internal DPUPR'
+];
+
+export type SipdStatus = 'draft' | 'siap_sipd' | 'sudah_sipd' | 'ditolak_sipd';
 
 export interface BudgetRule {
   programName: string;
@@ -32,6 +42,10 @@ export interface Proposal {
   activityName?: string;
   tahunUsulan?: string;
   jenisUsulan?: string;
+  sumberUsulan?: string;
+  kecamatan?: string;
+  desa?: string;
+  pengusulPokir?: string[]; // Multiple pengusul for Pokir DPRD
   location: string;
   estimatedBudget: number;
   justification: string;
@@ -43,6 +57,9 @@ export interface Proposal {
   requirementsMet: Record<string, boolean>;
   submittedBy: string;
   submittedAt: string;
+  sipdStatus?: SipdStatus;
+  sipdRegistrationNo?: string;
+  sipdNotes?: string;
 }
 
 export interface Requirement {
@@ -76,8 +93,13 @@ export const defaultNonBidangRequirements: Record<string, Requirement[]> = {
   ],
   'POKIR (DPRD)': [
     { id: 'req_pokir_1', label: 'Dokumen Reses / Usulan Pokir DPRD', description: 'Surat usulan resmi Pokok-Pokok Pikiran (POKIR) Anggota DPRD.' },
-    { id: 'req_pokir_2', label: 'Kesesuaian Dapil (Daerah Pemilihan)', description: 'Lokasi usulan berada di wilayah Dapil anggota DPRD pengusul.' },
+    { id: 'req_pokir_2', label: 'Identitas Pengusul & Dapil (Daerah Pemilihan)', description: 'Nama-nama pengusul (anggota dewan/fraksi) dan wilayah Dapil pengusul.' },
     { id: 'req_pokir_3', label: 'Sinergi dengan Program Strategis Daerah', description: 'Selaras dengan sasaran RPJMD dan RKPD Kabupaten Nagekeo.' },
+  ],
+  'RENJA (OPD/Dinas)': [
+    { id: 'req_renja_1', label: 'Kesesuaian Renstra / Renja Perangkat Daerah', description: 'Usulan masuk dalam Renstra & Rancangan Awal Renja OPD.' },
+    { id: 'req_renja_2', label: 'Kesiapan Dokumen Teknis & KAK/TOR', description: 'Kerangka Acuan Kerja (KAK) dan rincian teknis telah disiapkan.' },
+    { id: 'req_renja_3', label: 'Analisis Standar Biaya & Kelayakan Anggaran', description: 'Rincian anggaran telah memenuhi Standar Satuan Harga (SSH) Nagekeo.' }
   ]
 };
 

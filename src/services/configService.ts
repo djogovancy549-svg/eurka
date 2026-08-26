@@ -1,6 +1,7 @@
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { Requirement, BidangConfig, BIDANG_LIST } from '../types';
+import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
 
 // Helper to prevent slow Firestore connections from hanging the UI
 const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> => {
@@ -8,6 +9,46 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Prom
     promise,
     new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), ms))
   ]);
+};
+
+export const getNagekeoWilayah = async (): Promise<KecamatanDesa[]> => {
+  try {
+    const cached = localStorage.getItem('cached_nagekeo_wilayah');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'appConfig', 'masterWilayah');
+    const docSnap = await withTimeout(getDoc(docRef), 8000, null as any);
+    if (docSnap && docSnap.exists() && docSnap.data().wilayah) {
+      const data = docSnap.data().wilayah as KecamatanDesa[];
+      localStorage.setItem('cached_nagekeo_wilayah', JSON.stringify(data));
+      return data;
+    }
+  } catch (e) {
+    console.warn('Using default wilayah due to slow connection or error:', e);
+  }
+
+  localStorage.setItem('cached_nagekeo_wilayah', JSON.stringify(DEFAULT_NAGEKEO_WILAYAH));
+  return DEFAULT_NAGEKEO_WILAYAH;
+};
+
+export const saveNagekeoWilayah = async (wilayah: KecamatanDesa[]) => {
+  try {
+    localStorage.setItem('cached_nagekeo_wilayah', JSON.stringify(wilayah));
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'appConfig', 'masterWilayah');
+    await withTimeout(setDoc(docRef, { wilayah }, { merge: true }), 8000, undefined);
+  } catch (e) {
+    console.warn('Saved wilayah locally, Firestore sync delayed:', e);
+  }
 };
 
 export const getAdminRequirements = async (): Promise<Requirement[]> => {
