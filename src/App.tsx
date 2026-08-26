@@ -8,6 +8,7 @@ import BidangDashboard from './components/BidangDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import RenjaDashboard from './components/RenjaDashboard';
 import UrkRenjaMatrix from './components/UrkRenjaMatrix';
+import DpaDashboard from './components/DpaDashboard';
 import PlanningBanner from './components/PlanningBanner';
 import { 
   LogOut, 
@@ -18,7 +19,8 @@ import {
   GitMerge, 
   Layers, 
   BookOpen, 
-  ShieldCheck 
+  ShieldCheck,
+  WalletCards
 } from 'lucide-react';
 import { ADMIN_EMAILS } from './types';
 
@@ -169,6 +171,24 @@ export default function App() {
               </div>
             </NavLink>
 
+            {/* 4. Dokumen Pelaksanaan Anggaran (DPA) & SPPD */}
+            <NavLink 
+              to="/dpa" 
+              className={({ isActive }) => 
+                `flex items-center gap-3 p-3 rounded-xl text-xs font-bold transition-all ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <WalletCards className="w-4 h-4 text-yellow-400" />
+              <div className="flex-1">
+                <div>DPA & Realisasi SPPD</div>
+                <div className="text-[10px] font-normal opacity-75">Anggaran & Perjalanan Dinas</div>
+              </div>
+            </NavLink>
+
             {isAdmin && (
               <>
                 <div className="text-[10px] font-bold text-slate-500 uppercase px-3 pt-5 pb-2 tracking-widest">
@@ -239,6 +259,16 @@ export default function App() {
                   path="/matriks" 
                   element={
                     <UrkRenjaMatrix 
+                      userEmail={user?.email || ''} 
+                      userName={user?.displayName || ''} 
+                      isAdmin={!!isAdmin} 
+                    />
+                  } 
+                />
+                <Route 
+                  path="/dpa" 
+                  element={
+                    <DpaDashboard 
                       userEmail={user?.email || ''} 
                       userName={user?.displayName || ''} 
                       isAdmin={!!isAdmin} 

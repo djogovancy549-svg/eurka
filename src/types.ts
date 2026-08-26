@@ -115,6 +115,62 @@ export const DEFAULT_RENJA_PROGRAMS: RenjaProgram[] = [];
 
 export const DEFAULT_RENJA_SUB_KEGIATAN: RenjaSubKegiatan[] = [];
 
+// ==========================================
+// DPA (DOKUMEN PELAKSANAAN ANGGARAN) & SPPD
+// ==========================================
+
+export interface DpaItem {
+  id: string;
+  tahun: string;
+  nomorDpa: string;
+  kodeProgram: string;
+  namaProgram: string;
+  kodeSubKegiatan: string;
+  namaSubKegiatan: string;
+  bidangPengampu: string; // SDA, BM, CK, PL, Tata Ruang, Sekretariat
+  sumberDana: string; // DAU, DAK Fisik, PAD, etc.
+  paguDpa: number; // Pagu Anggaran Definitif DPA
+  paguSppd?: number; // Porsi pagu belanja perjalanan dinas dalam sub-kegiatan
+  realisasiKeuangan: number; // Total realisasi belanja (SP2D)
+  realisasiFisik: number; // Persentase realisasi fisik (0 - 100%)
+  targetKinerja?: string;
+  keterangan?: string;
+  updatedAt: string;
+}
+
+export interface SppdRecord {
+  id: string;
+  dpaItemId?: string; // ID Sub-Kegiatan DPA terkait
+  kodeSubKegiatan?: string;
+  namaSubKegiatan?: string;
+  bidangPengampu: string;
+  nomorSpt: string; // Nomor Surat Perintah Tugas
+  nomorSppd: string; // Nomor SPPD
+  namaPelaksana: string; // Pegawai yang bertugas
+  nipPelaksana?: string;
+  pangkatGolongan?: string; // Penata / III/c, dll
+  jabatan?: string;
+  maksudPerjalanan: string; // Keperluan dinas / tujuan kegiatan
+  jenisPerjalanan: 'Dalam Daerah' | 'Luar Daerah';
+  lokasiTujuan: string; // Desa/Kecamatan atau Kota Tujuan
+  tanggalBerangkat: string;
+  tanggalKembali: string;
+  lamaHari: number;
+  biayaUangHarian: number;
+  biayaTransport: number;
+  biayaPenginapan: number;
+  biayaLainnya: number;
+  totalBiaya: number; // Total SPPD yang terpakai
+  sumberDana: string;
+  statusPencairan: 'Draft' | 'Pengajuan' | 'Disetujui' | 'Cair (SP2D)';
+  noSp2d?: string;
+  tglSp2d?: string;
+  buktiUrl?: string;
+  catatan?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Requirement {
   id: string;
   label: string;

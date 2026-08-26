@@ -944,4 +944,494 @@ export const printMatriksUrkRenja = (
   }
 };
 
+// =========================================================
+// CETAK LAPORAN REALISASI DPA (DOKUMEN PELAKSANAAN ANGGARAN)
+// =========================================================
+export const printDokumenDpa = (
+  dpaList: any[],
+  sppdList: any[],
+  filterBidang: string = 'Semua',
+  tahun: string = '2025'
+) => {
+  const filteredDpa = dpaList.filter(d => filterBidang === 'Semua' || d.bidangPengampu === filterBidang);
+  const totalPagu = filteredDpa.reduce((acc, d) => acc + (d.paguDpa || 0), 0);
+  const totalRealisasi = filteredDpa.reduce((acc, d) => acc + (d.realisasiKeuangan || 0), 0);
+  const sisaPagu = totalPagu - totalRealisasi;
+  const persentaseRealisasi = totalPagu > 0 ? ((totalRealisasi / totalPagu) * 100).toFixed(2) : '0.00';
+
+  // Hitung total SPPD terkait
+  const filteredSppd = sppdList.filter(s => filterBidang === 'Semua' || s.bidangPengampu === filterBidang);
+  const totalSppdTerpakai = filteredSppd.reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Laporan Realisasi DPA - Dinas PUPR Nagekeo</title>
+      <style>
+        @page { size: landscape; margin: 12mm; }
+        body { font-family: 'Arial', sans-serif; font-size: 8.5pt; color: #1e293b; line-height: 1.3; }
+        .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+        .header h1 { font-size: 13pt; margin: 0; text-transform: uppercase; font-weight: bold; }
+        .header h2 { font-size: 10.5pt; margin: 2px 0; text-transform: uppercase; }
+        .header p { font-size: 8.5pt; margin: 0; color: #475569; }
+        .meta-box { width: 100%; border-collapse: collapse; margin-bottom: 12px; background: #f8fafc; border: 1px solid #cbd5e1; }
+        .meta-box td { padding: 6px 10px; font-size: 8.5pt; }
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .data-table th, .data-table td { border: 1px solid #64748b; padding: 5px 6px; font-size: 8pt; vertical-align: top; }
+        .data-table th { background-color: #0284c7; color: #ffffff; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 7.5pt; }
+        .number { text-align: right; font-family: 'Courier New', monospace; font-weight: 600; }
+        .center { text-align: center; }
+        .progress-bar-bg { width: 100%; background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+        .progress-bar-fill { height: 100%; background: #10b981; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 25px; page-break-inside: avoid; }
+        .sig-block { width: 45%; text-align: center; }
+        .sig-space { height: 55px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>DINAS PEKERJAAN UMUM DAN PENATAAN RUANG</h2>
+        <p>LAPORAN REALISASI DOKUMEN PELAKSANAAN ANGGARAN (DPA) TAHUN ANGGARAN ${tahun}</p>
+      </div>
+
+      <table class="meta-box">
+        <tr>
+          <td><strong>Unit Organisasi</strong>: Dinas Pekerjaan Umum dan Penataan Ruang</td>
+          <td><strong>Total Pagu DPA</strong>: <span style="font-weight:bold; color:#0369a1;">${formatRupiah(totalPagu)}</span></td>
+        </tr>
+        <tr>
+          <td><strong>Bidang Teknis</strong>: ${filterBidang === 'Semua' ? 'Seluruh Bidang DPUPR' : filterBidang}</td>
+          <td><strong>Total Realisasi Keuangan</strong>: <span style="font-weight:bold; color:#15803d;">${formatRupiah(totalRealisasi)} (${persentaseRealisasi}%)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Sisa Anggaran (Silpa)</strong>: <span style="font-weight:bold; color:#b91c1c;">${formatRupiah(sisaPagu)}</span></td>
+          <td><strong>Total Realisasi SPPD</strong>: <span style="font-weight:bold; color:#b45309;">${formatRupiah(totalSppdTerpakai)} (${filteredSppd.length} SPT)</span></td>
+        </tr>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 25px;">No.</th>
+            <th style="width: 100px;">Kode Sub-Kegiatan</th>
+            <th>Program / Sub-Kegiatan DPA</th>
+            <th style="width: 70px;">Bidang</th>
+            <th style="width: 75px;">Sumber Dana</th>
+            <th style="width: 95px;">Pagu DPA (Rp)</th>
+            <th style="width: 95px;">Realisasi (Rp)</th>
+            <th style="width: 50px;">Fisik (%)</th>
+            <th style="width: 95px;">Sisa Pagu (Rp)</th>
+            <th style="width: 85px;">SPPD Terpakai (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredDpa.length === 0 ? `
+            <tr><td colspan="10" class="center" style="color: #64748b; font-style: italic; padding: 20px;">Belum ada data DPA pada filter ini</td></tr>
+          ` : filteredDpa.map((item, idx) => {
+            const itemSppd = filteredSppd.filter(s => s.dpaItemId === item.id || s.kodeSubKegiatan === item.kodeSubKegiatan);
+            const totalItemSppd = itemSppd.reduce((a, b) => a + (b.totalBiaya || 0), 0);
+            const itemSisa = (item.paguDpa || 0) - (item.realisasiKeuangan || 0);
+            const persen = item.paguDpa > 0 ? ((item.realisasiKeuangan / item.paguDpa) * 100).toFixed(1) : '0';
+
+            return `
+              <tr>
+                <td class="center">${idx + 1}</td>
+                <td style="font-family: monospace; font-size: 7.5pt;">${item.kodeSubKegiatan}</td>
+                <td>
+                  <strong>${item.namaSubKegiatan}</strong>
+                  <div style="font-size: 7.5pt; color: #64748b;">${item.nomorDpa || '-'} ${item.targetKinerja ? `| Target: ${item.targetKinerja}` : ''}</div>
+                </td>
+                <td class="center font-bold"><strong>${item.bidangPengampu}</strong></td>
+                <td class="center"><span style="background: #e2e8f0; padding: 2px 4px; border-radius: 3px; font-weight: 600;">${item.sumberDana}</span></td>
+                <td class="number">${formatRupiah(item.paguDpa || 0)}</td>
+                <td class="number" style="color: #15803d;">
+                  ${formatRupiah(item.realisasiKeuangan || 0)}
+                  <div style="font-size: 7pt; color: #475569;">(${persen}%)</div>
+                </td>
+                <td class="center">
+                  <strong>${item.realisasiFisik || 0}%</strong>
+                  <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${Math.min(100, item.realisasiFisik || 0)}%;"></div></div>
+                </td>
+                <td class="number" style="color: ${itemSisa < 0 ? '#b91c1c' : '#334155'}; font-weight: bold;">
+                  ${formatRupiah(itemSisa)}
+                </td>
+                <td class="number" style="color: #b45309;">
+                  ${formatRupiah(totalItemSppd)}
+                  <div style="font-size: 7pt; color: #64748b;">${itemSppd.length} SPT</div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background: #f1f5f9; font-weight: bold;">
+            <th colspan="5" style="text-align: right; background: #e2e8f0; color: #0f172a;">JUMLAH TOTAL :</th>
+            <th class="number" style="background: #e0f2fe; color: #0369a1;">${formatRupiah(totalPagu)}</th>
+            <th class="number" style="background: #dcfce7; color: #15803d;">${formatRupiah(totalRealisasi)}</th>
+            <th class="center" style="background: #e2e8f0; color: #0f172a;">${persentaseRealisasi}%</th>
+            <th class="number" style="background: #fee2e2; color: #b91c1c;">${formatRupiah(sisaPagu)}</th>
+            <th class="number" style="background: #fef3c7; color: #b45309;">${formatRupiah(totalSppdTerpakai)}</th>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Mengetahui,<br>Pejabat Pembuat Komitmen (PPK) / Pengelola Anggaran</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Kepala Dinas Pekerjaan Umum dan Penataan Ruang<br>Kabupaten Nagekeo</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=750');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
+// =========================================================
+// CETAK REKAPITULASI BIAYA SPPD (PERJALANAN DINAS)
+// =========================================================
+export const printRekapSppd = (
+  sppdList: any[],
+  filterBidang: string = 'Semua',
+  tahun: string = '2025'
+) => {
+  const filteredSppd = sppdList.filter(s => filterBidang === 'Semua' || s.bidangPengampu === filterBidang);
+  const totalBiaya = filteredSppd.reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+  const totalDalamDaerah = filteredSppd.filter(s => s.jenisPerjalanan === 'Dalam Daerah').reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+  const totalLuarDaerah = filteredSppd.filter(s => s.jenisPerjalanan === 'Luar Daerah').reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Rekapitulasi SPPD - Dinas PUPR Nagekeo</title>
+      <style>
+        @page { size: landscape; margin: 10mm; }
+        body { font-family: 'Arial', sans-serif; font-size: 8pt; color: #1e293b; line-height: 1.25; }
+        .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+        .header h1 { font-size: 12pt; margin: 0; text-transform: uppercase; font-weight: bold; }
+        .header h2 { font-size: 10pt; margin: 2px 0; text-transform: uppercase; }
+        .header p { font-size: 8pt; margin: 0; color: #475569; }
+        .summary-grid { display: flex; gap: 10px; margin-bottom: 12px; }
+        .summary-card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
+        .summary-title { font-size: 7.5pt; color: #64748b; text-transform: uppercase; font-weight: bold; }
+        .summary-val { font-size: 11pt; font-weight: bold; color: #0f172a; }
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .data-table th, .data-table td { border: 1px solid #94a3b8; padding: 4px 5px; font-size: 7.5pt; vertical-align: top; }
+        .data-table th { background-color: #0f766e; color: #ffffff; font-weight: bold; text-align: center; text-transform: uppercase; }
+        .number { text-align: right; font-family: 'Courier New', monospace; font-weight: bold; }
+        .center { text-align: center; }
+        .badge { display: inline-block; padding: 2px 5px; border-radius: 4px; font-size: 7pt; font-weight: bold; }
+        .badge-dalam { background: #e0f2fe; color: #0369a1; }
+        .badge-luar { background: #fef3c7; color: #92400e; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 25px; page-break-inside: avoid; }
+        .sig-block { width: 45%; text-align: center; }
+        .sig-space { height: 50px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>DINAS PEKERJAAN UMUM DAN PENATAAN RUANG</h2>
+        <p>REKAPITULASI SURAT PERINTAH PERJALANAN DINAS (SPPD) TAHUN ANGGARAN ${tahun}</p>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-title">Total SPPD Terbit</div>
+          <div class="summary-val">${filteredSppd.length} Dokumen SPT</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">Perjalanan Dalam Daerah</div>
+          <div class="summary-val" style="color:#0369a1;">${formatRupiah(totalDalamDaerah)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">Perjalanan Luar Daerah</div>
+          <div class="summary-val" style="color:#b45309;">${formatRupiah(totalLuarDaerah)}</div>
+        </div>
+        <div class="summary-card" style="background:#ecfdf5; border-color:#6ee7b7;">
+          <div class="summary-title">Total Realisasi Anggaran SPPD</div>
+          <div class="summary-val" style="color:#047857;">${formatRupiah(totalBiaya)}</div>
+        </div>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 20px;">No.</th>
+            <th style="width: 90px;">No. SPT / SPPD</th>
+            <th style="width: 110px;">Nama Pelaksana / NIP</th>
+            <th style="width: 60px;">Bidang</th>
+            <th>Maksud Perjalanan & Sub-Kegiatan</th>
+            <th style="width: 80px;">Tujuan & Jenis</th>
+            <th style="width: 75px;">Tgl / Lama</th>
+            <th style="width: 70px;">Uang Harian</th>
+            <th style="width: 70px;">Transport</th>
+            <th style="width: 70px;">Penginapan/Riil</th>
+            <th style="width: 85px;">Total Biaya (Rp)</th>
+            <th style="width: 65px;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredSppd.length === 0 ? `
+            <tr><td colspan="12" class="center" style="color: #64748b; font-style: italic; padding: 20px;">Tidak ada catatan SPPD pada filter ini</td></tr>
+          ` : filteredSppd.map((s, idx) => `
+            <tr>
+              <td class="center">${idx + 1}</td>
+              <td>
+                <strong>${s.nomorSpt || '-'}</strong>
+                <div style="font-size: 6.5pt; color: #64748b;">${s.nomorSppd || '-'}</div>
+              </td>
+              <td>
+                <strong>${s.namaPelaksana}</strong>
+                <div style="font-size: 6.5pt; color: #475569;">${s.nipPelaksana ? `NIP. ${s.nipPelaksana}` : (s.jabatan || '-')}</div>
+              </td>
+              <td class="center font-bold">${s.bidangPengampu}</td>
+              <td>
+                <strong>${s.maksudPerjalanan}</strong>
+                <div style="font-size: 6.5pt; color: #0284c7;">Sub-Keg: ${s.namaSubKegiatan || s.kodeSubKegiatan || '-'} (${s.sumberDana || 'DAU'})</div>
+              </td>
+              <td>
+                <strong>${s.lokasiTujuan}</strong>
+                <div><span class="badge ${s.jenisPerjalanan === 'Dalam Daerah' ? 'badge-dalam' : 'badge-luar'}">${s.jenisPerjalanan}</span></div>
+              </td>
+              <td class="center">
+                ${s.tanggalBerangkat}<br>
+                <span style="font-weight: bold; color: #0f766e;">(${s.lamaHari || 1} Hari)</span>
+              </td>
+              <td class="number">${formatRupiah(s.biayaUangHarian || 0)}</td>
+              <td class="number">${formatRupiah(s.biayaTransport || 0)}</td>
+              <td class="number">${formatRupiah((s.biayaPenginapan || 0) + (s.biayaLainnya || 0))}</td>
+              <td class="number" style="color: #047857;">${formatRupiah(s.totalBiaya || 0)}</td>
+              <td class="center">
+                <span style="font-weight: bold; font-size: 7pt; color: ${s.statusPencairan === 'Cair (SP2D)' ? '#15803d' : '#b45309'};">
+                  ${s.statusPencairan || 'Draft'}
+                </span>
+                ${s.noSp2d ? `<div style="font-size: 6pt; color: #64748b;">${s.noSp2d}</div>` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background: #e2e8f0; font-weight: bold;">
+            <th colspan="10" style="text-align: right; color: #0f172a;">TOTAL PENGELUARAN SPPD :</th>
+            <th class="number" style="background: #ccfbf1; color: #0f766e; font-size: 8.5pt;">${formatRupiah(totalBiaya)}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Bendahara Pengeluaran Dinas PUPR</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Pengguna Anggaran / Kepala Dinas</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=750');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
+// =========================================================
+// CETAK RINCIAN BIAYA SPPD & KUITANSI PERORANGAN
+// =========================================================
+export const printRincianSppd = (sppd: any) => {
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Rincian Biaya Perjalanan Dinas - ${sppd.namaPelaksana}</title>
+      <style>
+        @page { size: portrait; margin: 15mm; }
+        body { font-family: 'Arial', sans-serif; font-size: 9pt; color: #1e293b; line-height: 1.4; }
+        .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 16px; }
+        .header h1 { font-size: 12pt; margin: 0; text-transform: uppercase; font-weight: bold; }
+        .header h2 { font-size: 10.5pt; margin: 3px 0; text-transform: uppercase; }
+        .header p { font-size: 8.5pt; margin: 0; color: #475569; }
+        .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .meta-table td { padding: 4px 6px; font-size: 9pt; vertical-align: top; }
+        .table-biaya { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .table-biaya th, .table-biaya td { border: 1px solid #334155; padding: 6px 8px; font-size: 9pt; }
+        .table-biaya th { background: #f1f5f9; font-weight: bold; text-align: center; text-transform: uppercase; }
+        .number { text-align: right; font-family: 'Courier New', monospace; font-weight: bold; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 30px; page-break-inside: avoid; }
+        .sig-block { width: 45%; text-align: center; font-size: 9pt; }
+        .sig-space { height: 60px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>DINAS PEKERJAAN UMUM DAN PENATAAN RUANG</h2>
+        <p>RINCIAN BIAYA PERJALANAN DINAS (LAMPIRAN SPPD)</p>
+      </div>
+
+      <table class="meta-table">
+        <tr>
+          <td style="width: 180px;">Lampiran SPPD Nomor</td>
+          <td style="width: 10px;">:</td>
+          <td><strong>${sppd.nomorSppd || '-'}</strong></td>
+        </tr>
+        <tr>
+          <td>Nomor Surat Perintah Tugas</td>
+          <td>:</td>
+          <td>${sppd.nomorSpt || '-'}</td>
+        </tr>
+        <tr>
+          <td>Tanggal Berangkat / Kembali</td>
+          <td>:</td>
+          <td>${sppd.tanggalBerangkat} s/d ${sppd.tanggalKembali} (${sppd.lamaHari || 1} Hari)</td>
+        </tr>
+      </table>
+
+      <table class="table-biaya">
+        <thead>
+          <tr>
+            <th style="width: 30px;">No.</th>
+            <th>Perincian Biaya</th>
+            <th style="width: 140px;">Jumlah (Rp)</th>
+            <th style="width: 160px;">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align: center;">1</td>
+            <td>
+              <strong>Uang Harian Perjalanan Dinas</strong>
+              <div style="font-size: 8pt; color: #555;">${sppd.lamaHari || 1} hari x Uang Harian Standar SSH</div>
+            </td>
+            <td class="number">${formatRupiah(sppd.biayaUangHarian || 0)}</td>
+            <td>${sppd.jenisPerjalanan}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center;">2</td>
+            <td>
+              <strong>Biaya Transportasi / Tiket</strong>
+              <div style="font-size: 8pt; color: #555;">BBM / Sewa Kendaraan / Tiket Perjalanan</div>
+            </td>
+            <td class="number">${formatRupiah(sppd.biayaTransport || 0)}</td>
+            <td>Tujuan: ${sppd.lokasiTujuan}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center;">3</td>
+            <td>
+              <strong>Biaya Penginapan / Hotel</strong>
+              <div style="font-size: 8pt; color: #555;">Akomodasi Tempat Tinggal</div>
+            </td>
+            <td class="number">${formatRupiah(sppd.biayaPenginapan || 0)}</td>
+            <td>${sppd.biayaPenginapan ? 'Sesuai Bukti Riil' : '-'}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center;">4</td>
+            <td>
+              <strong>Biaya Lain-lain / Pengeluaran Riil</strong>
+              <div style="font-size: 8pt; color: #555;">Representasi / Tol / Retribusi / Parkir</div>
+            </td>
+            <td class="number">${formatRupiah(sppd.biayaLainnya || 0)}</td>
+            <td>${sppd.catatan || '-'}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background: #f8fafc; font-weight: bold;">
+            <td colspan="2" style="text-align: right;">JUMLAH TOTAL :</td>
+            <td class="number" style="background: #dcfce7; color: #15803d; font-size: 10pt;">${formatRupiah(sppd.totalBiaya || 0)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div style="font-size: 8.5pt; margin-top: 10px; padding: 8px; border: 1px dashed #94a3b8; background: #fafafa;">
+        <strong>Beban Anggaran:</strong> Sub-Kegiatan <em>"${sppd.namaSubKegiatan || sppd.kodeSubKegiatan || '-'}"</em>, Bidang <strong>${sppd.bidangPengampu}</strong>, Sumber Dana <strong>${sppd.sumberDana || 'DAU'}</strong>.
+      </div>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Telah dibayar sejumlah<br><strong>${formatRupiah(sppd.totalBiaya || 0)}</strong><br><br>Bendahara Pengeluaran,</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Telah menerima jumlah uang sebesar<br><strong>${formatRupiah(sppd.totalBiaya || 0)}</strong><br><br>Yang Menerima / Pelaksana,</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">${sppd.namaPelaksana}</p>
+          <p>${sppd.nipPelaksana ? `NIP. ${sppd.nipPelaksana}` : (sppd.jabatan || 'Pelaksana Tugas')}</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=850,height=750');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
 
