@@ -17,7 +17,7 @@ import {
 import { SshItem, RenjaSubKegiatan } from '../types';
 import { getAllSshItems, saveAllSshItems, resetToDefaultSsh } from '../services/sshService';
 import { getRenjaMasterData } from '../services/renjaService';
-import { formatRupiah, parseMoney } from '../utils';
+import { formatRupiah, formatInputMoney, parseMoney } from '../utils';
 
 interface SshManagerProps {
   userEmail?: string;
@@ -493,8 +493,11 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
                     required
                     type="text"
                     placeholder="Min nominal..."
-                    value={formData.minPrice ? formatRupiah(formData.minPrice).replace('Rp ', '') : ''}
-                    onChange={e => setFormData({ ...formData, minPrice: e.target.value })}
+                    value={formatInputMoney(formData.minPrice)}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, minPrice: digits });
+                    }}
                     className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-black text-amber-950 outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
@@ -507,8 +510,11 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
                     required
                     type="text"
                     placeholder="Max nominal..."
-                    value={formData.maxPrice ? formatRupiah(formData.maxPrice).replace('Rp ', '') : ''}
-                    onChange={e => setFormData({ ...formData, maxPrice: e.target.value })}
+                    value={formatInputMoney(formData.maxPrice)}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, maxPrice: digits });
+                    }}
                     className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-black text-amber-950 outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>

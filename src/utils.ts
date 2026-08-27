@@ -7,6 +7,15 @@ export const formatRupiah = (amount: number): string => {
   }).format(amount);
 };
 
+export const formatInputMoney = (val: string | number | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '';
+  const cleanStr = String(val).replace(/[^0-9]/g, '');
+  if (!cleanStr) return '';
+  const num = parseInt(cleanStr, 10);
+  if (isNaN(num)) return '';
+  return new Intl.NumberFormat('id-ID').format(num);
+};
+
 export const parseMoney = (val: any): number => {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (!val) return 0;

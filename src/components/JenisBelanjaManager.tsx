@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { JenisBelanjaItem, BIDANG_LIST } from '../types';
 import { getAllJenisBelanja, saveAllJenisBelanja, resetToDefaultJenisBelanja } from '../services/jenisBelanjaService';
-import { formatRupiah, parseMoney } from '../utils';
+import { formatRupiah, formatInputMoney, parseMoney } from '../utils';
 
 interface JenisBelanjaManagerProps {
   userEmail?: string;
@@ -469,7 +469,7 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
                           <span className="text-[10px] font-bold text-amber-700">Rp</span>
                           <input
                             type="text"
-                            value={formatRupiah(item.paguAnggaran).replace('Rp ', '')}
+                            value={formatInputMoney(item.paguAnggaran)}
                             onChange={e => handleInlinePaguChange(item.id, e.target.value)}
                             className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs font-black text-amber-950 focus:ring-2 focus:ring-amber-500 outline-none shadow-2xs"
                           />
@@ -660,12 +660,20 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
                     <input
                       required
                       type="text"
-                      placeholder="Masukkan nilai nominal pagu..."
-                      value={formData.paguAnggaran ? formatRupiah(formData.paguAnggaran).replace('Rp ', '') : ''}
-                      onChange={e => setFormData({ ...formData, paguAnggaran: e.target.value })}
+                      placeholder="Masukkan nilai nominal pagu (misal: 50.000.000)..."
+                      value={formatInputMoney(formData.paguAnggaran)}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '');
+                        setFormData({ ...formData, paguAnggaran: digits });
+                      }}
                       className="w-full text-sm font-black text-amber-950 outline-none"
                     />
                   </div>
+                  {formData.paguAnggaran ? (
+                    <p className="text-[10px] font-bold text-amber-800 mt-1">
+                      Nominal: {formatRupiah(parseMoney(formData.paguAnggaran))}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
@@ -715,12 +723,12 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
                         <span className="text-[10px] font-bold text-slate-400">Rp</span>
                         <input
                           type="text"
-                          value={formData.paguPerBidang[b] ? formatRupiah(formData.paguPerBidang[b]).replace('Rp ', '') : ''}
+                          value={formatInputMoney(formData.paguPerBidang[b])}
                           onChange={e => {
-                            const val = e.target.value;
+                            const digits = e.target.value.replace(/[^0-9]/g, '');
                             setFormData(prev => ({
                               ...prev,
-                              paguPerBidang: { ...prev.paguPerBidang, [b]: val }
+                              paguPerBidang: { ...prev.paguPerBidang, [b]: digits }
                             }));
                           }}
                           className="w-full text-xs font-bold outline-none text-slate-900"
