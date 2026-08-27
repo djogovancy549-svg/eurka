@@ -10,6 +10,7 @@ import {
 import { 
   getRenjaMasterData, 
   saveRenjaMasterData, 
+  subscribeRenjaMasterData,
   clearAllRenjaData,
   linkUrkToRenja, 
   unlinkUrkFromRenja, 
@@ -153,6 +154,20 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeRenjaMasterData((data) => {
+      setRenjaData(data);
+      setExpandedPrograms(prev => {
+        const copy = { ...prev };
+        data.programs.forEach(p => { if (copy[p.id] === undefined) copy[p.id] = true; });
+        return copy;
+      });
+      setExpandedKegiatans(prev => {
+        const copy = { ...prev };
+        (data.kegiatan || []).forEach(k => { if (copy[k.id] === undefined) copy[k.id] = true; });
+        return copy;
+      });
+    });
+    return () => unsub();
   }, []);
 
   // Register with global refresh button in top navigation bar
@@ -184,7 +199,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     };
 
     const updatedPrograms = [...renjaData.programs, created];
-    await saveRenjaMasterData(updatedPrograms, renjaData.subKegiatan, renjaData.kegiatan || []);
+    await saveRenjaMasterData(updatedPrograms, renjaData.kegiatan || [], renjaData.subKegiatan);
     setRenjaData(prev => ({ ...prev, programs: updatedPrograms }));
     setExpandedPrograms(prev => ({ ...prev, [progId]: true }));
     setIsAddProgramOpen(false);
@@ -213,7 +228,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     const updatedPrograms = renjaData.programs.filter(p => p.id !== progId);
     const updatedKegiatan = (renjaData.kegiatan || []).filter(k => k.programId !== progId);
     const updatedSub = renjaData.subKegiatan.filter(s => s.programId !== progId);
-    await saveRenjaMasterData(updatedPrograms, updatedSub, updatedKegiatan);
+    await saveRenjaMasterData(updatedPrograms, updatedKegiatan, updatedSub);
     setRenjaData({ programs: updatedPrograms, kegiatan: updatedKegiatan, subKegiatan: updatedSub });
   };
 
@@ -236,7 +251,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     };
 
     const updatedKegiatans = [...(renjaData.kegiatan || []), created];
-    await saveRenjaMasterData(renjaData.programs, renjaData.subKegiatan, updatedKegiatans);
+    await saveRenjaMasterData(renjaData.programs, updatedKegiatans, renjaData.subKegiatan);
     setRenjaData(prev => ({ ...prev, kegiatan: updatedKegiatans }));
     setExpandedKegiatans(prev => ({ ...prev, [kegId]: true }));
     setIsAddKegiatanOpen(false);
@@ -264,7 +279,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     if (!window.confirm('Yakin ingin menghapus Kegiatan ini beserta seluruh Sub-Kegiatannya?')) return;
     const updatedKegiatan = (renjaData.kegiatan || []).filter(k => k.id !== kegId);
     const updatedSub = renjaData.subKegiatan.filter(s => s.kegiatanId !== kegId);
-    await saveRenjaMasterData(renjaData.programs, updatedSub, updatedKegiatan);
+    await saveRenjaMasterData(renjaData.programs, updatedKegiatan, updatedSub);
     setRenjaData(prev => ({ ...prev, kegiatan: updatedKegiatan, subKegiatan: updatedSub }));
   };
 
@@ -292,7 +307,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     };
 
     const updatedSub = [...renjaData.subKegiatan, created];
-    await saveRenjaMasterData(renjaData.programs, updatedSub, renjaData.kegiatan || []);
+    await saveRenjaMasterData(renjaData.programs, renjaData.kegiatan || [], updatedSub);
     setRenjaData(prev => ({ ...prev, subKegiatan: updatedSub }));
     setIsAddSubOpen(false);
 
@@ -321,7 +336,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
   const handleDeleteSubKegiatan = async (subId: string) => {
     if (!window.confirm('Yakin ingin menghapus Sub-Kegiatan ini?')) return;
     const updatedSub = renjaData.subKegiatan.filter(s => s.id !== subId);
-    await saveRenjaMasterData(renjaData.programs, updatedSub, renjaData.kegiatan || []);
+    await saveRenjaMasterData(renjaData.programs, renjaData.kegiatan || [], updatedSub);
     setRenjaData(prev => ({ ...prev, subKegiatan: updatedSub }));
   };
 

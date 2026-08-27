@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { RenjaProgram, RenjaKegiatan, RenjaSubKegiatan, Proposal } from '../types';
 
 const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> => {
@@ -15,86 +15,115 @@ export interface RenjaMasterData {
   subKegiatan: RenjaSubKegiatan[];
 }
 
-// Helper to detect and filter out legacy dummy template items
-const isDummyData = (programs: RenjaProgram[], subKegiatan: RenjaSubKegiatan[]): boolean => {
-  const dummyProgIds = ['prog_sda', 'prog_bm', 'prog_ck_air', 'prog_pl_limbah', 'prog_ck_gedung', 'prog_tr', 'prog_sekretariat'];
-  return programs.some(p => dummyProgIds.includes(p.id)) || subKegiatan.some(s => s.id.startsWith('sub_sda_') || s.id.startsWith('sub_bm_'));
+/**
+ * Sanitizes and fixes any misplaced items in masterRenja (e.g. if subKegiatan was saved into kegiatan or vice versa)
+ */
+export const sanitizeRenjaData = (data: RenjaMasterData): RenjaMasterData => {
+  const rawProg = data.programs || [];
+  const rawKeg = data.kegiatan || [];
+  const rawSub = data.subKegiatan || [];
+
+  const realKeg: RenjaKegiatan[] = [];
+  const realSub: RenjaSubKegiatan[] = [];
+
+  // Sort out rawKeg
+  rawKeg.forEach((item: any) => {
+    if (item.kodeSubKegiatan || item.namaSubKegiatan) {
+      realSub.push(item as RenjaSubKegiatan);
+    } else {
+      realKeg.push(item as RenjaKegiatan);
+    }
+  });
+
+  // Sort out rawSub
+  rawSub.forEach((item: any) => {
+    if (item.kodeSubKegiatan || item.namaSubKegiatan) {
+      if (!realSub.some(s => s.id === item.id)) {
+        realSub.push(item as RenjaSubKegiatan);
+      }
+    } else if (item.kodeKegiatan || item.namaKegiatan) {
+      if (!realKeg.some(k => k.id === item.id)) {
+        realKeg.push(item as RenjaKegiatan);
+      }
+    }
+  });
+
+  return {
+    programs: rawProg,
+    kegiatan: realKeg,
+    subKegiatan: realSub
+  };
 };
 
 export const getRenjaMasterData = async (): Promise<RenjaMasterData> => {
-  // Check local storage cache first
-  let cachedPrograms: RenjaProgram[] = [];
-  let cachedKegiatan: RenjaKegiatan[] = [];
-  let cachedSubKegiatan: RenjaSubKegiatan[] = [];
-
-  try {
-    const rawProg = localStorage.getItem('cached_renja_programs');
-    const rawKeg = localStorage.getItem('cached_renja_kegiatan');
-    const rawSub = localStorage.getItem('cached_renja_subkegiatan');
-    if (rawProg) cachedPrograms = JSON.parse(rawProg);
-    if (rawKeg) cachedKegiatan = JSON.parse(rawKeg);
-    if (rawSub) cachedSubKegiatan = JSON.parse(rawSub);
-
-    // If cache has old dummy data, clear it immediately
-    if (isDummyData(cachedPrograms, cachedSubKegiatan)) {
-      cachedPrograms = [];
-      cachedKegiatan = [];
-      cachedSubKegiatan = [];
-      localStorage.removeItem('cached_renja_programs');
-      localStorage.removeItem('cached_renja_kegiatan');
-      localStorage.removeItem('cached_renja_subkegiatan');
-      // Overwrite firestore dummy data with empty array
-      await saveRenjaMasterData([], [], []);
-      return { programs: [], kegiatan: [], subKegiatan: [] };
-    }
-
-    if (cachedPrograms.length > 0 || cachedKegiatan.length > 0 || cachedSubKegiatan.length > 0) {
-      // Async refresh from Firestore in background
-      fetchFromFirestore();
-      return { programs: cachedPrograms, kegiatan: cachedKegiatan, subKegiatan: cachedSubKegiatan };
-    }
-  } catch (e) {}
-
-  return await fetchFromFirestore();
-};
-
-const fetchFromFirestore = async (): Promise<RenjaMasterData> => {
+  // 1. Try Firestore first
   try {
     const docRef = doc(db, 'appConfig', 'masterRenja');
-    const docSnap = await withTimeout(getDoc(docRef), 8000, null as any);
+    const docSnap = await withTimeout(getDoc(docRef), 4000, null as any);
 
     if (docSnap && docSnap.exists()) {
       const data = docSnap.data();
-      let programs: RenjaProgram[] = (data.programs && Array.isArray(data.programs)) ? data.programs : [];
-      let kegiatan: RenjaKegiatan[] = (data.kegiatan && Array.isArray(data.kegiatan)) ? data.kegiatan : [];
-      let subKegiatan: RenjaSubKegiatan[] = (data.subKegiatan && Array.isArray(data.subKegiatan)) ? data.subKegiatan : [];
-
-      if (isDummyData(programs, subKegiatan)) {
-        programs = [];
-        kegiatan = [];
-        subKegiatan = [];
-        await saveRenjaMasterData([], [], []);
-      }
+      const sanitized = sanitizeRenjaData({
+        programs: (data.programs && Array.isArray(data.programs)) ? data.programs : [],
+        kegiatan: (data.kegiatan && Array.isArray(data.kegiatan)) ? data.kegiatan : [],
+        subKegiatan: (data.subKegiatan && Array.isArray(data.subKegiatan)) ? data.subKegiatan : []
+      });
 
       try {
-        localStorage.setItem('cached_renja_programs', JSON.stringify(programs));
-        localStorage.setItem('cached_renja_kegiatan', JSON.stringify(kegiatan));
-        localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(subKegiatan));
+        localStorage.setItem('cached_renja_programs', JSON.stringify(sanitized.programs));
+        localStorage.setItem('cached_renja_kegiatan', JSON.stringify(sanitized.kegiatan));
+        localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(sanitized.subKegiatan));
       } catch (e) {}
 
-      return { programs, kegiatan, subKegiatan };
+      return sanitized;
     }
   } catch (e) {
     console.warn('Failed to load RENJA from Firestore:', e);
   }
 
+  // 2. Fallback to local storage cache
   try {
-    localStorage.setItem('cached_renja_programs', JSON.stringify([]));
-    localStorage.setItem('cached_renja_kegiatan', JSON.stringify([]));
-    localStorage.setItem('cached_renja_subkegiatan', JSON.stringify([]));
+    const rawProg = localStorage.getItem('cached_renja_programs');
+    const rawKeg = localStorage.getItem('cached_renja_kegiatan');
+    const rawSub = localStorage.getItem('cached_renja_subkegiatan');
+    if (rawProg || rawKeg || rawSub) {
+      return sanitizeRenjaData({
+        programs: rawProg ? JSON.parse(rawProg) : [],
+        kegiatan: rawKeg ? JSON.parse(rawKeg) : [],
+        subKegiatan: rawSub ? JSON.parse(rawSub) : []
+      });
+    }
   } catch (e) {}
 
   return { programs: [], kegiatan: [], subKegiatan: [] };
+};
+
+export const subscribeRenjaMasterData = (callback: (data: RenjaMasterData) => void) => {
+  try {
+    const docRef = doc(db, 'appConfig', 'masterRenja');
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const sanitized = sanitizeRenjaData({
+          programs: (data.programs && Array.isArray(data.programs)) ? data.programs : [],
+          kegiatan: (data.kegiatan && Array.isArray(data.kegiatan)) ? data.kegiatan : [],
+          subKegiatan: (data.subKegiatan && Array.isArray(data.subKegiatan)) ? data.subKegiatan : []
+        });
+
+        try {
+          localStorage.setItem('cached_renja_programs', JSON.stringify(sanitized.programs));
+          localStorage.setItem('cached_renja_kegiatan', JSON.stringify(sanitized.kegiatan));
+          localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(sanitized.subKegiatan));
+        } catch (e) {}
+
+        callback(sanitized);
+      }
+    }, (err) => {
+      console.warn('onSnapshot error for masterRenja:', err);
+    });
+  } catch (e) {
+    return () => {};
+  }
 };
 
 export const clearAllRenjaData = async (): Promise<void> => {
@@ -122,21 +151,23 @@ export const clearAllRenjaData = async (): Promise<void> => {
 };
 
 export const saveRenjaMasterData = async (programs: RenjaProgram[], kegiatan: RenjaKegiatan[], subKegiatan: RenjaSubKegiatan[]) => {
+  const sanitized = sanitizeRenjaData({ programs, kegiatan, subKegiatan });
+
   try {
-    localStorage.setItem('cached_renja_programs', JSON.stringify(programs));
-    localStorage.setItem('cached_renja_kegiatan', JSON.stringify(kegiatan));
-    localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(subKegiatan));
+    localStorage.setItem('cached_renja_programs', JSON.stringify(sanitized.programs));
+    localStorage.setItem('cached_renja_kegiatan', JSON.stringify(sanitized.kegiatan));
+    localStorage.setItem('cached_renja_subkegiatan', JSON.stringify(sanitized.subKegiatan));
   } catch (e) {}
 
   try {
     const docRef = doc(db, 'appConfig', 'masterRenja');
     await withTimeout(
       setDoc(docRef, {
-        programs: JSON.parse(JSON.stringify(programs)),
-        kegiatan: JSON.parse(JSON.stringify(kegiatan)),
-        subKegiatan: JSON.parse(JSON.stringify(subKegiatan)),
+        programs: JSON.parse(JSON.stringify(sanitized.programs)),
+        kegiatan: JSON.parse(JSON.stringify(sanitized.kegiatan)),
+        subKegiatan: JSON.parse(JSON.stringify(sanitized.subKegiatan)),
         updatedAt: new Date().toISOString()
-      }, { merge: true }),
+      }),
       8000,
       undefined
     );
