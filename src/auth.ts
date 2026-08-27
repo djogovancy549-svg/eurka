@@ -64,6 +64,23 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
   }
 };
 
+export const isTokenExpired = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  const savedAt = sessionStorage.getItem(TOKEN_SAVED_AT);
+  if (!savedAt) return true;
+  const elapsed = Date.now() - parseInt(savedAt, 10);
+  // Access tokens last 3600 seconds (60 mins). Consider > 50 mins (3,000,000 ms) as expired.
+  return elapsed > 50 * 60 * 1000;
+};
+
+export const clearToken = () => {
+  cachedAccessToken = null;
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_SAVED_AT);
+  }
+};
+
 export const getAccessToken = async (): Promise<string | null> => {
   if (!cachedAccessToken && typeof window !== 'undefined') {
     cachedAccessToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);

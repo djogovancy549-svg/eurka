@@ -1,7 +1,7 @@
 import { IndependenceDayBanner } from './IndependenceDayBanner';
 import React, { useState, useEffect, useRef } from 'react';
 import { getRows, appendRow, updateRow } from '../sheetsApi';
-import { getAccessToken } from '../auth';
+import { getAccessToken, googleSignIn } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagekeoWilayah } from '../services/configService';
@@ -403,9 +403,21 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setSuccessMsg('Data usulan berhasil dihapus.');
       setTimeout(() => setSuccessMsg(null), 3000);
       await fetchProposals(selectedConfig.sheetId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete proposal', err);
-      alert('Gagal menghapus data usulan.');
+      const msg = err?.message || String(err);
+      if (msg.includes('UNAUTHENTICATED') || msg.includes('401') || msg.includes('kadaluarsa')) {
+        if (window.confirm('🔒 Sesi Google Login Anda telah kadaluarsa.\n\nApakah Anda ingin login ulang dengan Google sekarang?')) {
+          try {
+            await googleSignIn();
+            alert('✅ Berhasil login kembali dengan Google! Silakan coba hapus usulan kembali.');
+          } catch (e) {
+            alert('Gagal login kembali dengan Google.');
+          }
+        }
+      } else {
+        alert(`Gagal menghapus data usulan: ${msg}`);
+      }
     }
   };
 
@@ -625,9 +637,21 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       fetchProposals(configToUse.sheetId);
       setSuccessMsg('Usulan berhasil dikirim sebagai data pra-SIPD!');
       setTimeout(() => setSuccessMsg(null), 3500);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Submit failed', err);
-      alert(`Gagal mengirim usulan: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err?.message || String(err);
+      if (msg.includes('UNAUTHENTICATED') || msg.includes('401') || msg.includes('kadaluarsa')) {
+        if (window.confirm('🔒 Sesi Google Login / Otorisasi Google Sheets Anda telah kadaluarsa.\n\nApakah Anda ingin login ulang dengan Google sekarang untuk memperbarui sesi?')) {
+          try {
+            await googleSignIn();
+            alert('✅ Berhasil memperbarui Login Google! Silakan tekan tombol Kirim Usulan sekali lagi.');
+          } catch (e) {
+            alert('Gagal memperbarui Login Google. Silakan klik tombol Login dengan Google di pojok kanan atas.');
+          }
+        }
+      } else {
+        alert(`Gagal mengirim usulan: ${msg}`);
+      }
     } finally {
       setIsSubmitting(false);
     }

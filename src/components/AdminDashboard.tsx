@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getRows, updateCell } from '../sheetsApi';
-import { getAccessToken } from '../auth';
+import { getAccessToken, googleSignIn } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BudgetRule, Requirement, NON_BIDANG_UNITS, defaultNonBidangRequirements, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus, PriorityLevel, PriorityCriteria, PRIORITY_LEVELS } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, deleteBidangConfig, getNagekeoWilayah } from '../services/configService';
@@ -359,9 +359,19 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setSuccessMsg('Data usulan berhasil dihapus.');
       setTimeout(() => setSuccessMsg(null), 3000);
       await fetchProposals(selectedConfig.sheetId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete proposal', err);
-      alert('Gagal menghapus data usulan.');
+      const msg = err?.message || String(err);
+      if (msg.includes('UNAUTHENTICATED') || msg.includes('401') || msg.includes('kadaluarsa')) {
+        if (window.confirm('🔒 Sesi Google Login Anda telah kadaluarsa.\n\nApakah Anda ingin login ulang dengan Google sekarang?')) {
+          try {
+            await googleSignIn();
+            alert('✅ Berhasil login kembali dengan Google!');
+          } catch (e) {}
+        }
+      } else {
+        alert(`Gagal menghapus data usulan: ${msg}`);
+      }
     }
   };
 
