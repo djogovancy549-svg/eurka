@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
-import { Requirement, BidangConfig, BIDANG_LIST } from '../types';
+import { Requirement, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS } from '../types';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
 
 // Helper to prevent slow Firestore connections from hanging the UI
@@ -136,7 +136,8 @@ export const getAllBidangConfigs = async (): Promise<BidangConfig[]> => {
   const sourceConfigs = fetchFailed ? cachedConfigs : configs;
 
   // If some are missing, fill them with defaults
-  const filledConfigs = BIDANG_LIST.map(id => {
+  const allUnits = Array.from(new Set([...BIDANG_LIST, ...NON_BIDANG_UNITS]));
+  const filledConfigs = allUnits.map(id => {
     const existing = sourceConfigs.find(c => c.id === id);
     if (existing) return existing;
     return {
