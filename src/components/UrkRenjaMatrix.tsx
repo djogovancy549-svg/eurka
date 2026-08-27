@@ -28,6 +28,8 @@ import {
   exportCsvPrioritas 
 } from '../utils';
 import PriorityScoringModal from './PriorityScoringModal';
+import { useRegisterRefresh } from '../context/RefreshContext';
+import RefreshButton from './RefreshButton';
 import { 
   GitMerge, 
   Printer, 
@@ -137,6 +139,9 @@ export default function UrkRenjaMatrix({ userEmail, userName, isAdmin = true }: 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('urk-renja-matrix', loadData);
 
   const openLinkModal = (prop: Proposal) => {
     setSelectedProposal(prop);
@@ -327,6 +332,7 @@ export default function UrkRenjaMatrix({ userEmail, userName, isAdmin = true }: 
 
         {/* Global Action Tools */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <RefreshButton variant="compact" label="Segarkan" />
           {activeTab === 'priority' ? (
             <>
               {isAdmin && (

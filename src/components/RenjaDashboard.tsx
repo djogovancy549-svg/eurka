@@ -20,6 +20,8 @@ import { getProposalsByBidang } from '../services/proposalService';
 import { formatRupiah, printDokumenRenja } from '../utils';
 import { addNotification } from '../services/notificationService';
 import { logSecurityActivity } from '../services/securityService';
+import { useRegisterRefresh } from '../context/RefreshContext';
+import RefreshButton from './RefreshButton';
 import { 
   Building2, 
   Plus, 
@@ -152,6 +154,9 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('renja-dashboard', loadData);
 
   const toggleProgram = (progId: string) => {
     setExpandedPrograms(prev => ({ ...prev, [progId]: !prev[progId] }));
@@ -445,6 +450,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <RefreshButton variant="outline" label="Segarkan" />
             {renjaData.programs.length > 0 && (
               <button
                 onClick={() => printDokumenRenja(renjaData.programs, renjaData.subKegiatan, allProposals, '2025')}

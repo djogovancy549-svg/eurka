@@ -7,6 +7,7 @@ import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveReq
 import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagekeoWilayah } from '../services/configService';
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
+import { useRegisterRefresh } from '../context/RefreshContext';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -252,6 +253,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setIsRefreshing(false);
     }
   };
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('bidang-dashboard', handleRefreshData, [selectedBidangId, selectedConfig?.sheetId]);
 
   const handleSaveConfig = async () => {
     if (!selectedConfig) return;

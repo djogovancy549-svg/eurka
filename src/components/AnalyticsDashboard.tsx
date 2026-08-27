@@ -30,6 +30,8 @@ import { getDpaMasterData } from '../services/dpaService';
 import { getCostComponentRules, calculateBudgetBreakdown } from '../services/costRulesService';
 import { formatRupiah } from '../utils';
 import { KecamatanDesa } from '../data/nagekeoWilayah';
+import { useRegisterRefresh } from '../context/RefreshContext';
+import RefreshButton from './RefreshButton';
 
 interface AnalyticsDashboardProps {
   userEmail: string;
@@ -50,42 +52,45 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   const [filterBidang, setFilterBidang] = useState<string>('Semua');
   const [filterSumberUsulan, setFilterSumberUsulan] = useState<string>('Semua');
 
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      const [configs, dpaData, rules, wilayah] = await Promise.all([
+        getAllBidangConfigs(),
+        getDpaMasterData(),
+        getCostComponentRules(),
+        getNagekeoWilayah()
+      ]);
+
+      setDpaItems(dpaData.dpaList);
+      setSppdRecords(dpaData.sppdList);
+      setCostRules(rules);
+      setWilayahList(wilayah);
+
+      const allProps: Proposal[] = [];
+      await Promise.all(
+        configs.map(async (cfg) => {
+          try {
+            const pList = await getProposalsByBidang(cfg.id, cfg.sheetId);
+            allProps.push(...pList);
+          } catch (e) {}
+        })
+      );
+
+      setProposals(allProps);
+    } catch (e) {
+      console.error('Error loading analytics data:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAllData = async () => {
-      setLoading(true);
-      try {
-        const [configs, dpaData, rules, wilayah] = await Promise.all([
-          getAllBidangConfigs(),
-          getDpaMasterData(),
-          getCostComponentRules(),
-          getNagekeoWilayah()
-        ]);
-
-        setDpaItems(dpaData.dpaList);
-        setSppdRecords(dpaData.sppdList);
-        setCostRules(rules);
-        setWilayahList(wilayah);
-
-        const allProps: Proposal[] = [];
-        await Promise.all(
-          configs.map(async (cfg) => {
-            try {
-              const pList = await getProposalsByBidang(cfg.id, cfg.sheetId);
-              allProps.push(...pList);
-            } catch (e) {}
-          })
-        );
-
-        setProposals(allProps);
-      } catch (e) {
-        console.error('Error loading analytics data:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadAllData();
   }, []);
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('analytics-dashboard', loadAllData);
 
   // Filtered dataset
   const filteredProposals = proposals.filter(p => {
@@ -239,6 +244,7 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
         </div>
 
         <div className="flex items-center gap-3 relative z-10 shrink-0">
+          <RefreshButton variant="outline" label="Segarkan" />
           <button
             type="button"
             onClick={handlePrintAnalytics}

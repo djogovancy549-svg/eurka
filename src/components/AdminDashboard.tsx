@@ -10,6 +10,7 @@ import { getAllBidangConfigs, saveBidangConfig, deleteBidangConfig, getNagekeoWi
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD, printRekapitulasiPrioritas, exportCsvPrioritas } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
 import { getAllPriorityEvaluations } from '../services/priorityService';
+import { useRegisterRefresh } from '../context/RefreshContext';
 import PriorityScoringModal from './PriorityScoringModal';
 import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Plus, Trash2, ShieldCheck, Tag, Users, Layers, X, CheckSquare, Award, Sliders } from 'lucide-react';
 
@@ -290,6 +291,9 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setIsRefreshing(false);
     }
   };
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('admin-dashboard', handleRefreshData, [selectedBidangId, selectedConfig?.sheetId]);
 
   const handleSaveConfig = async () => {
     if (!selectedConfig) return;

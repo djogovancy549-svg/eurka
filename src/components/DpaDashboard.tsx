@@ -17,6 +17,8 @@ import {
   printRekapSppd, 
   printRincianSppd 
 } from '../utils';
+import { useRegisterRefresh } from '../context/RefreshContext';
+import RefreshButton from './RefreshButton';
 import { 
   WalletCards, 
   Coins, 
@@ -145,6 +147,9 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
       setLoading(false);
     }
   };
+
+  // Register with global refresh button in top navigation bar
+  useRegisterRefresh('dpa-dashboard', loadData);
 
   // Auto calculate total SPPD when sub costs change
   useEffect(() => {
@@ -467,6 +472,7 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <RefreshButton variant="outline" label="Segarkan" />
             <button
               onClick={() => printDokumenDpa(dpaList, sppdList, selectedBidang)}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
