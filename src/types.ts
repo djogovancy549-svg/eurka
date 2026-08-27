@@ -101,6 +101,9 @@ export interface Proposal {
   sumberDanaTarget?: string; // Target sumber dana usulan (DAU, DAK Fisik, dll)
   kecamatan?: string;
   desa?: string;
+  nomorMusrenbangDesa?: string; // Nomor Berita Acara Musrenbang Desa / Kelurahan
+  prioritasDesa?: string; // Urutan prioritas usulan di RKPDes / Desa
+  beritaAcaraDesaUrl?: string; // Link / Lampiran dokumen BA Musrenbang Desa
   pengusulPokir?: string[]; // Multiple pengusul for Pokir DPRD
   location: string;
   estimatedBudget: number;

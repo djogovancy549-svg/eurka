@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Coins, 
   Plus, 
@@ -62,15 +62,29 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
     paguPerBidang: {}
   });
 
-  const categories = [
+  const DEFAULT_CATEGORIES = [
     'Belanja Modal Perangkat Lunak',
     'Belanja Sewa Cloud & Infrastruktur',
     'Belanja Jasa Pemeliharaan & SLA',
     'Belanja Sewa Aplikasi (SaaS)',
     'Belanja Modal Infrastruktur PUPR',
+    'Belanja Modal Peralatan dan Mesin',
+    'Belanja Modal Bangunan Gedung',
+    'Belanja Modal Jalan, Irigasi & Jaringan',
     'Belanja Operasional & Pemeliharaan',
     'Lainnya / Umum'
   ];
+
+  const [customCategoryList, setCustomCategoryList] = useState<string[]>([]);
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState<boolean>(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>('');
+
+  // Compute dynamic all categories list
+  const allCategories = useMemo(() => {
+    const fromItems = items.map(i => i.kategori).filter(Boolean);
+    const set = new Set([...DEFAULT_CATEGORIES, ...fromItems, ...customCategoryList]);
+    return Array.from(set);
+  }, [items, customCategoryList]);
 
   const targetBidangs = ['SDA', 'BM', 'CK', 'PL', 'Tata Ruang', 'Sekretariat'];
 
@@ -92,6 +106,7 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setIsCustomCategoryMode(false);
     setFormData({
       id: 'jb_' + Date.now(),
       kodeBelanja: '',
@@ -115,6 +130,7 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
 
   const handleOpenEditModal = (item: JenisBelanjaItem) => {
     setEditingItem(item);
+    setIsCustomCategoryMode(false);
     const pbMap: Record<string, string> = {};
     targetBidangs.forEach(b => {
       pbMap[b] = item.paguPerBidang && item.paguPerBidang[b] ? item.paguPerBidang[b].toString() : '0';
@@ -352,7 +368,7 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
             className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
           >
             <option value="ALL">Semua Kategori Belanja</option>
-            {categories.map(c => (
+            {allCategories.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -562,19 +578,59 @@ export default function JenisBelanjaManager({ userEmail = 'admin@nagekeokab.go.i
 
                 {/* Kategori */}
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Kategori Belanja *
-                  </label>
-                  <select
-                    required
-                    value={formData.kategori}
-                    onChange={e => setFormData({ ...formData, kategori: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"
-                  >
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      Kategori Belanja *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomCategoryMode(!isCustomCategoryMode);
+                        if (!isCustomCategoryMode) {
+                          setCustomCategoryInput('');
+                        }
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 underline flex items-center gap-1"
+                    >
+                      {isCustomCategoryMode ? '← Pilih dari Daftar' : '+ Tambah Custom Nomenklatur OPD'}
+                    </button>
+                  </div>
+
+                  {isCustomCategoryMode ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        required
+                        type="text"
+                        placeholder="Ketik Nomenklatur Kategori OPD (mis: Belanja Modal Peralatan Komunikasi)"
+                        value={formData.kategori}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData({ ...formData, kategori: val });
+                        }}
+                        className="w-full border border-emerald-400 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/40"
+                      />
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={formData.kategori}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__ADD_NEW__') {
+                          setIsCustomCategoryMode(true);
+                          setFormData({ ...formData, kategori: '' });
+                        } else {
+                          setFormData({ ...formData, kategori: val });
+                        }
+                      }}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"
+                    >
+                      {allCategories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__ADD_NEW__" className="font-bold text-emerald-700">+ Tambah Custom Nomenklatur Baru...</option>
+                    </select>
+                  )}
                 </div>
               </div>
 
