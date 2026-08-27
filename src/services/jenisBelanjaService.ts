@@ -352,9 +352,16 @@ export const calculatePaguSummary = (
 
     // Match proposals for this bidang
     const bidangProposals = proposals.filter(p => {
-      // In this app, proposals in a bidang sheet belong to that bidang
-      // or if p has a field matching bidang
-      return true; // We will pass filtered proposals per bidang when calculating per bidang or filter by proposal origin
+      const pBidang = ((p as any).bidangId || p.jenisUsulan || '').trim();
+      if (!pBidang) return false;
+      if (pBidang === bidang) return true;
+      if (bidang === 'BM' && (pBidang === 'BM' || pBidang.includes('Bina Marga'))) return true;
+      if (bidang === 'SDA' && (pBidang === 'SDA' || pBidang.includes('Sumber Daya Air'))) return true;
+      if (bidang === 'CK' && (pBidang === 'CK' || pBidang.includes('Cipta Karya'))) return true;
+      if (bidang === 'PL' && (pBidang === 'PL' || pBidang.includes('Perumahan') || pBidang.includes('Permukiman'))) return true;
+      if (bidang === 'Tata Ruang' && (pBidang === 'Tata Ruang' || pBidang === 'TR')) return true;
+      if (bidang === 'Sekretariat' && pBidang.includes('Sekretariat')) return true;
+      return false;
     });
 
     const totalUsulanBidang = bidangProposals.reduce((sum, p) => sum + (Number(p.estimatedBudget) || 0), 0);

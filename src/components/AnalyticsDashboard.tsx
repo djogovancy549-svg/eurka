@@ -78,7 +78,11 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
         configs.map(async (cfg) => {
           try {
             const pList = await getProposalsByBidang(cfg.id, cfg.sheetId);
-            allProps.push(...pList);
+            allProps.push(...pList.map(p => ({
+              ...p,
+              bidangId: (p as any).bidangId || cfg.id,
+              bidangName: cfg.name || cfg.id
+            })));
           } catch (e) {}
         })
       );
@@ -135,17 +139,50 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
     return Array.from(yearsSet).sort((a, b) => Number(a) - Number(b));
   }, [proposals, dpaItems, sppdRecords]);
 
+  // Helper function to check if a Bidang field matches the selected filterBidang
+  const matchesBidangFilter = (itemBidang: string, filterTarget: string) => {
+    if (!filterTarget || filterTarget === 'Semua') return true;
+    const b = (itemBidang || '').trim();
+    const sel = filterTarget.trim();
+    if (b === sel) return true;
+    if (sel === 'BM' && (b === 'BM' || b.includes('Bina Marga'))) return true;
+    if (sel === 'SDA' && (b === 'SDA' || b.includes('Sumber Daya Air'))) return true;
+    if (sel === 'CK' && (b === 'CK' || b.includes('Cipta Karya'))) return true;
+    if (sel === 'PL' && (b === 'PL' || b.includes('Perumahan') || b.includes('Permukiman'))) return true;
+    if (sel === 'Tata Ruang' && (b === 'Tata Ruang' || b === 'TR')) return true;
+    if (sel === 'Sekretariat' && b.includes('Sekretariat')) return true;
+    return false;
+  };
+
+  const getStandardBidang = (rawBidang: string): string => {
+    const b = (rawBidang || '').trim().toLowerCase();
+    if (!b) return 'SDA';
+    if (b === 'bm' || b.includes('bina marga')) return 'BM';
+    if (b === 'sda' || b.includes('sumber daya air')) return 'SDA';
+    if (b === 'ck' || b.includes('cipta karya')) return 'CK';
+    if (b === 'pl' || b.includes('perumahan') || b.includes('permukiman')) return 'PL';
+    if (b === 'tata ruang' || b === 'tr') return 'Tata Ruang';
+    if (b.includes('sekretariat')) return 'Sekretariat';
+    return 'SDA'; // Fallback
+  };
+
   // Filtered dataset
   const filteredProposals = proposals.filter(p => {
     if (filterTahun !== 'Semua' && String(p.tahunUsulan) !== filterTahun) return false;
-    if (filterBidang !== 'Semua' && p.jenisUsulan !== filterBidang && p.programName !== filterBidang) return false;
+    if (filterBidang !== 'Semua') {
+      const pBidang = ((p as any).bidangId || p.jenisUsulan || '').trim();
+      if (!matchesBidangFilter(pBidang, filterBidang)) return false;
+    }
     if (filterSumberUsulan !== 'Semua' && p.sumberUsulan !== filterSumberUsulan) return false;
     return true;
   });
 
   const filteredDpa = dpaItems.filter(d => {
     if (filterTahun !== 'Semua' && String(d.tahun) !== filterTahun) return false;
-    if (filterBidang !== 'Semua' && d.bidangPengampu !== filterBidang) return false;
+    if (filterBidang !== 'Semua') {
+      const dBidang = (d.bidangPengampu || '').trim();
+      if (!matchesBidangFilter(dBidang, filterBidang)) return false;
+    }
     return true;
   });
 
@@ -154,7 +191,10 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
       const year = s.tanggalBerangkat ? s.tanggalBerangkat.slice(0, 4) : '';
       if (year && year !== filterTahun) return false;
     }
-    if (filterBidang !== 'Semua' && s.bidangPengampu !== filterBidang) return false;
+    if (filterBidang !== 'Semua') {
+      const sBidang = (s.bidangPengampu || '').trim();
+      if (!matchesBidangFilter(sBidang, filterBidang)) return false;
+    }
     return true;
   });
 
@@ -227,7 +267,8 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   });
 
   filteredProposals.forEach(p => {
-    const b = p.jenisUsulan || 'SDA';
+    const rawB = (p as any).bidangId || p.jenisUsulan || '';
+    const b = getStandardBidang(rawB);
     if (bidangStatsMap[b]) {
       bidangStatsMap[b].usulanCount += 1;
       bidangStatsMap[b].usulanBudget += (p.estimatedBudget || 0);
@@ -235,7 +276,7 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   });
 
   filteredDpa.forEach(d => {
-    const b = d.bidangPengampu || 'SDA';
+    const b = getStandardBidang(d.bidangPengampu || '');
     if (bidangStatsMap[b]) {
       bidangStatsMap[b].dpaBudget += (d.paguDpa || 0);
       bidangStatsMap[b].realisasiBudget += (d.realisasiKeuangan || 0);

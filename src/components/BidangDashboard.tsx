@@ -15,7 +15,7 @@ import { JenisBelanjaItem, SumberDanaItem, SshItem, RenjaSubKegiatan, RenjaProgr
 import { getAllJenisBelanja } from '../services/jenisBelanjaService';
 import { getAllSumberDana, subscribeSumberDana } from '../services/sumberDanaService';
 import { getAllSshItems } from '../services/sshService';
-import { getRenjaMasterData } from '../services/renjaService';
+import { getRenjaMasterData, subscribeRenjaMasterData } from '../services/renjaService';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins, Lock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -71,6 +71,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [renjaSubKegiatanList, setRenjaSubKegiatanList] = useState<RenjaSubKegiatan[]>([]);
   const [renjaProgramList, setRenjaProgramList] = useState<RenjaProgram[]>([]);
   const [isCustomSumberDanaMode, setIsCustomSumberDanaMode] = useState(false);
+  const [isCustomProgramMode, setIsCustomProgramMode] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -307,6 +308,50 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       unsub();
     };
   }, []);
+
+  useEffect(() => {
+    const unsub = subscribeRenjaMasterData((renjaData) => {
+      if (renjaData) {
+        setRenjaProgramList(renjaData.programs || []);
+        setRenjaSubKegiatanList(renjaData.subKegiatan || []);
+      }
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  const availableProgramOptions = React.useMemo(() => {
+    const set = new Set<string>();
+
+    (renjaProgramList || []).forEach(p => {
+      if (p.namaProgram && p.namaProgram.trim()) {
+        const b = (p.bidangPengampu || '').toLowerCase().trim();
+        const selB = (selectedBidangId || '').toLowerCase().trim();
+        if (!selB || !b || b.includes(selB) || selB.includes(b) || b === 'semua') {
+          set.add(p.namaProgram.trim());
+        }
+      }
+    });
+
+    if (set.size === 0) {
+      (renjaProgramList || []).forEach(p => {
+        if (p.namaProgram && p.namaProgram.trim()) {
+          set.add(p.namaProgram.trim());
+        }
+      });
+    }
+
+    if (selectedConfig?.budgetRules && Array.isArray(selectedConfig.budgetRules)) {
+      selectedConfig.budgetRules.forEach(r => {
+        if (r.programName && r.programName.trim()) {
+          set.add(r.programName.trim());
+        }
+      });
+    }
+
+    return Array.from(set);
+  }, [renjaProgramList, selectedBidangId, selectedConfig]);
 
   useEffect(() => {
     if (selectedBidangId && configs.length > 0) {
@@ -1310,21 +1355,40 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Nama Program *</label>
-                {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 ? (
-                  <select 
-                    required 
-                    value={formData.programName} 
-                    onChange={e => setFormData({...formData, programName: e.target.value})} 
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">Nama Program *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomProgramMode(!isCustomProgramMode)}
+                    className="text-[11px] font-extrabold text-blue-700 hover:text-blue-900 underline flex items-center gap-1"
+                  >
+                    {isCustomProgramMode ? '← Pilih dari Daftar Program' : '+ Tulis Kustom / Manual'}
+                  </button>
+                </div>
+                {isCustomProgramMode ? (
+                  <input
+                    required
+                    type="text"
+                    placeholder="Contoh: Program Pengelolaan SDA"
+                    value={formData.programName}
+                    onChange={e => setFormData({ ...formData, programName: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={formData.programName}
+                    onChange={e => setFormData({ ...formData, programName: e.target.value })}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
-                    <option value="">Pilih Program</option>
-                    {selectedConfig.budgetRules.map((rule, idx) => (
-                      <option key={idx} value={rule.programName}>{rule.programName}</option>
+                    <option value="">-- Pilih Program --</option>
+                    {availableProgramOptions.map((progName, idx) => (
+                      <option key={idx} value={progName}>{progName}</option>
                     ))}
+                    {formData.programName && !availableProgramOptions.includes(formData.programName) && (
+                      <option value={formData.programName}>[Kustom] {formData.programName}</option>
+                    )}
                   </select>
-                ) : (
-                  <input required type="text" placeholder="Contoh: Program Pengelolaan SDA" value={formData.programName} onChange={e => setFormData({...formData, programName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 )}
               </div>
 
