@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { SumberDanaItem, SUMBER_DANA_LIST } from '../types';
 
 const STORAGE_KEY = 'cached_master_sumber_dana';
@@ -23,7 +23,20 @@ export const DEFAULT_SUMBER_DANA_ITEMS: SumberDanaItem[] = SUMBER_DANA_LIST.map(
 }));
 
 export const getAllSumberDana = async (): Promise<SumberDanaItem[]> => {
-  // 1. Try local storage cache
+  // 1. Try Firestore first with timeout so custom items from Firestore are prioritized
+  try {
+    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
+    const docSnap = await withTimeout(getDoc(docRef), 3500, null as any);
+    if (docSnap && docSnap.exists() && docSnap.data().items) {
+      const items = docSnap.data().items as SumberDanaItem[];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      return items;
+    }
+  } catch (e) {
+    console.warn('Firestore fetch for Sumber Dana failed or timed out:', e);
+  }
+
+  // 2. Fallback to local storage cache
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
     if (cached) {
@@ -34,22 +47,26 @@ export const getAllSumberDana = async (): Promise<SumberDanaItem[]> => {
     }
   } catch (e) {}
 
-  // 2. Try Firestore
-  try {
-    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
-    const docSnap = await withTimeout(getDoc(docRef), 6000, null as any);
-    if (docSnap && docSnap.exists() && docSnap.data().items) {
-      const items = docSnap.data().items as SumberDanaItem[];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      return items;
-    }
-  } catch (e) {
-    console.warn('Using default Sumber Dana due to slow connection or error:', e);
-  }
-
   // 3. Fallback to default
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SUMBER_DANA_ITEMS));
   return DEFAULT_SUMBER_DANA_ITEMS;
+};
+
+export const subscribeSumberDana = (callback: (items: SumberDanaItem[]) => void) => {
+  try {
+    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().items) {
+        const items = docSnap.data().items as SumberDanaItem[];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        callback(items);
+      }
+    }, (err) => {
+      console.warn('onSnapshot error for masterSumberDana:', err);
+    });
+  } catch (e) {
+    return () => {};
+  }
 };
 
 export const saveAllSumberDana = async (items: SumberDanaItem[]) => {
@@ -70,3 +87,4 @@ export const resetToDefaultSumberDana = async (): Promise<SumberDanaItem[]> => {
   await saveAllSumberDana(DEFAULT_SUMBER_DANA_ITEMS);
   return DEFAULT_SUMBER_DANA_ITEMS;
 };
+

@@ -13,7 +13,7 @@ import { useRegisterRefresh } from '../context/RefreshContext';
 import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
 import { JenisBelanjaItem, SumberDanaItem, SshItem, RenjaSubKegiatan, RenjaProgram } from '../types';
 import { getAllJenisBelanja } from '../services/jenisBelanjaService';
-import { getAllSumberDana } from '../services/sumberDanaService';
+import { getAllSumberDana, subscribeSumberDana } from '../services/sumberDanaService';
 import { getAllSshItems } from '../services/sshService';
 import { getRenjaMasterData } from '../services/renjaService';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins, Lock } from 'lucide-react';
@@ -70,6 +70,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [sshList, setSshList] = useState<SshItem[]>([]);
   const [renjaSubKegiatanList, setRenjaSubKegiatanList] = useState<RenjaSubKegiatan[]>([]);
   const [renjaProgramList, setRenjaProgramList] = useState<RenjaProgram[]>([]);
+  const [isCustomSumberDanaMode, setIsCustomSumberDanaMode] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -294,6 +295,17 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeSumberDana((items) => {
+      if (items && items.length > 0) {
+        setSumberDanaList(items);
+      }
+    });
+    return () => {
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -1224,22 +1236,47 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-blue-900 block mb-1">
-                      Pilih Nomenklatur Sumber Dana *
-                    </label>
-                    <select
-                      required
-                      value={formData.sumberDanaTarget}
-                      onChange={e => setFormData({ ...formData, sumberDanaTarget: e.target.value })}
-                      className="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">-- Pilih Target Sumber Dana --</option>
-                      {sumberDanaList.map(sd => (
-                        <option key={sd.id} value={sd.namaSumberDana}>
-                          [{sd.kategori}] {sd.namaSumberDana} {sd.kodeDana ? `(${sd.kodeDana})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-blue-900 block">
+                        Pilih Nomenklatur Sumber Dana *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomSumberDanaMode(!isCustomSumberDanaMode)}
+                        className="text-[11px] font-extrabold text-blue-700 hover:text-blue-900 underline flex items-center gap-1"
+                      >
+                        {isCustomSumberDanaMode ? '← Pilih dari Daftar Master' : '+ Input Custom / Manual'}
+                      </button>
+                    </div>
+                    {isCustomSumberDanaMode ? (
+                      <input
+                        type="text"
+                        required
+                        value={formData.sumberDanaTarget}
+                        onChange={e => setFormData({ ...formData, sumberDanaTarget: e.target.value })}
+                        placeholder="Tulis Nomenklatur Sumber Dana Custom..."
+                        className="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    ) : (
+                      <select
+                        required
+                        value={formData.sumberDanaTarget}
+                        onChange={e => setFormData({ ...formData, sumberDanaTarget: e.target.value })}
+                        className="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="">-- Pilih Target Sumber Dana --</option>
+                        {sumberDanaList.map(sd => (
+                          <option key={sd.id} value={sd.namaSumberDana}>
+                            [{sd.kategori}] {sd.namaSumberDana} {sd.kodeDana ? `(${sd.kodeDana})` : ''}
+                          </option>
+                        ))}
+                        {formData.sumberDanaTarget && !sumberDanaList.some(sd => sd.namaSumberDana === formData.sumberDanaTarget) && (
+                          <option value={formData.sumberDanaTarget}>
+                            [Custom / Manual] {formData.sumberDanaTarget}
+                          </option>
+                        )}
+                      </select>
+                    )}
                   </div>
 
                   <div>

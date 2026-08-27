@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { SshItem } from '../types';
 import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
 
@@ -20,7 +20,20 @@ export const DEFAULT_SSH_ITEMS: SshItem[] = SSH_TIK_NAGEKEO.map((item, idx) => (
 }));
 
 export const getAllSshItems = async (): Promise<SshItem[]> => {
-  // 1. Try local storage cache
+  // 1. Try Firestore first with timeout so custom SSH items are prioritized
+  try {
+    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
+    const docSnap = await withTimeout(getDoc(docRef), 3500, null as any);
+    if (docSnap && docSnap.exists() && docSnap.data().items) {
+      const items = docSnap.data().items as SshItem[];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      return items;
+    }
+  } catch (e) {
+    console.warn('Firestore fetch for SSH items failed or timed out:', e);
+  }
+
+  // 2. Fallback to local storage cache
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
     if (cached) {
@@ -31,22 +44,26 @@ export const getAllSshItems = async (): Promise<SshItem[]> => {
     }
   } catch (e) {}
 
-  // 2. Try Firestore
-  try {
-    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
-    const docSnap = await withTimeout(getDoc(docRef), 6000, null as any);
-    if (docSnap && docSnap.exists() && docSnap.data().items) {
-      const items = docSnap.data().items as SshItem[];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      return items;
-    }
-  } catch (e) {
-    console.warn('Using default SSH due to slow connection or error:', e);
-  }
-
   // 3. Fallback to default
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SSH_ITEMS));
   return DEFAULT_SSH_ITEMS;
+};
+
+export const subscribeSshItems = (callback: (items: SshItem[]) => void) => {
+  try {
+    const docRef = doc(db, FIRESTORE_DOC_PATH[0], FIRESTORE_DOC_PATH[1]);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().items) {
+        const items = docSnap.data().items as SshItem[];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        callback(items);
+      }
+    }, (err) => {
+      console.warn('onSnapshot error for masterSshItems:', err);
+    });
+  } catch (e) {
+    return () => {};
+  }
 };
 
 export const saveAllSshItems = async (items: SshItem[]) => {
@@ -62,6 +79,7 @@ export const saveAllSshItems = async (items: SshItem[]) => {
     console.warn('Saved SSH items locally, Firestore sync delayed:', e);
   }
 };
+
 
 export const resetToDefaultSsh = async (): Promise<SshItem[]> => {
   await saveAllSshItems(DEFAULT_SSH_ITEMS);
