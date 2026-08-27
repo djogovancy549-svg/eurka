@@ -32,6 +32,9 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { ADMIN_EMAILS } from './types';
+import { db } from './firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+
 
 function GlobalRefreshToast() {
   const { refreshSuccessMsg } = useRefresh();
@@ -55,8 +58,38 @@ function MainApp() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [dynamicAdminEmails, setDynamicAdminEmails] = useState<string[]>([]);
   
-  const isAdmin = !!(user && user.email && ADMIN_EMAILS.includes(user.email));
+  const isAdmin = !!(
+    user && 
+    user.email && 
+    (ADMIN_EMAILS.includes(user.email) || dynamicAdminEmails.includes(user.email.toLowerCase()))
+  );
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('cached_admin_emails');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setDynamicAdminEmails(parsed);
+        }
+      }
+    } catch (e) {}
+
+    const docRef = doc(db, 'appConfig', 'adminEmails');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && Array.isArray(docSnap.data().emails)) {
+        const emails = docSnap.data().emails as string[];
+        setDynamicAdminEmails(emails);
+        localStorage.setItem('cached_admin_emails', JSON.stringify(emails));
+      }
+    }, (error) => {
+      console.warn('Failed to load admin emails dynamically:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = initAuth(

@@ -233,3 +233,57 @@ export const notifyAdminNewProposal = async () => {
   }
 };
 
+export const getDynamicAdminEmails = async (): Promise<string[]> => {
+  try {
+    const cached = localStorage.getItem('cached_admin_emails');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'appConfig', 'adminEmails');
+    const docSnap = await withTimeout(getDoc(docRef), 8000, null as any);
+    if (docSnap && docSnap.exists() && Array.isArray(docSnap.data().emails)) {
+      const emails = docSnap.data().emails as string[];
+      localStorage.setItem('cached_admin_emails', JSON.stringify(emails));
+      return emails;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch admin emails, returning cached or empty:', e);
+  }
+
+  return [];
+};
+
+export const saveDynamicAdminEmails = async (emails: string[]): Promise<void> => {
+  const cleanEmails = emails
+    .map(email => email.trim().toLowerCase())
+    .filter(email => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+    });
+
+  const uniqueEmails = Array.from(new Set(cleanEmails));
+
+  if (uniqueEmails.length > 50) {
+    throw new Error('Batas maksimal kuota admin adalah 50 email.');
+  }
+
+  try {
+    localStorage.setItem('cached_admin_emails', JSON.stringify(uniqueEmails));
+  } catch (e) {}
+
+  try {
+    const docRef = doc(db, 'appConfig', 'adminEmails');
+    await withTimeout(setDoc(docRef, { emails: uniqueEmails, lastUpdated: Date.now() }), 8000, undefined);
+  } catch (e) {
+    console.error('Failed to save admin emails:', e);
+    throw e;
+  }
+};
+
+

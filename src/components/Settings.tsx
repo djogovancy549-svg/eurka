@@ -19,7 +19,8 @@ import {
   ShieldCheck, 
   FileCheck2,
   SlidersHorizontal,
-  FolderTree
+  FolderTree,
+  Users
 } from 'lucide-react';
 import { Requirement, BidangConfig, BIDANG_LIST, SUMBER_DANA_LIST } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, getNagekeoWilayah, saveNagekeoWilayah } from '../services/configService';
@@ -30,6 +31,8 @@ import SecurityMaintenance from './SecurityMaintenance';
 import JenisBelanjaManager from './JenisBelanjaManager';
 import SumberDanaManager from './SumberDanaManager';
 import SshManager from './SshManager';
+import AdminUsersManager from './AdminUsersManager';
+
 
 interface SettingsProps {
   userEmail?: string;
@@ -38,7 +41,7 @@ interface SettingsProps {
 }
 
 export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userName = 'Administrator ', isAdmin = true }: SettingsProps) {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'jenis_belanja' | 'sumber_dana' | 'ssh_master' | 'cost_rules' | 'security' | 'wilayah_bidang' | 'requirements'>('jenis_belanja');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'jenis_belanja' | 'sumber_dana' | 'ssh_master' | 'cost_rules' | 'security' | 'wilayah_bidang' | 'requirements' | 'admin_users'>('jenis_belanja');
 
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -352,7 +355,22 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
         >
           <ShieldCheck className="w-4 h-4 text-slate-700" /> Keamanan System
         </button>
+        <button
+          onClick={() => setActiveSettingsTab('admin_users')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'admin_users'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Users className="w-4 h-4 text-indigo-600" /> Kelola Admin
+        </button>
       </div>
+
+      {/* TAB: KELOLA AKUN ADMIN */}
+      {activeSettingsTab === 'admin_users' && (
+        <AdminUsersManager userEmail={userEmail} isAdmin={isAdmin} />
+      )}
 
       {/* TAB 0: PAGU & JENIS BELANJA MANAGER */}
       {activeSettingsTab === 'jenis_belanja' && (
