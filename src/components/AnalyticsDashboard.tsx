@@ -22,12 +22,13 @@ import {
   ArrowUpRight,
   Calculator
 } from 'lucide-react';
-import { Proposal, DpaItem, SppdRecord, BIDANG_LIST, SUMBER_DANA_LIST, SUMBER_USULAN_OPTIONS, CostComponentRule } from '../types';
+import { Proposal, DpaItem, SppdRecord, BIDANG_LIST, SUMBER_DANA_LIST, SUMBER_USULAN_OPTIONS, CostComponentRule, JenisBelanjaItem, BidangConfig } from '../types';
 import { getAllBidangConfigs, getNagekeoWilayah } from '../services/configService';
 import { getProposalsByBidang } from '../services/proposalService';
 import { getRenjaMasterData } from '../services/renjaService';
 import { getDpaMasterData } from '../services/dpaService';
 import { getCostComponentRules, calculateBudgetBreakdown } from '../services/costRulesService';
+import { getAllJenisBelanja, calculatePaguSummary } from '../services/jenisBelanjaService';
 import { formatRupiah } from '../utils';
 import { KecamatanDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
@@ -45,6 +46,8 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   const [sppdRecords, setSppdRecords] = useState<SppdRecord[]>([]);
   const [costRules, setCostRules] = useState<CostComponentRule[]>([]);
   const [wilayahList, setWilayahList] = useState<KecamatanDesa[]>([]);
+  const [jenisBelanjaList, setJenisBelanjaList] = useState<JenisBelanjaItem[]>([]);
+  const [bidangConfigs, setBidangConfigs] = useState<BidangConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -55,17 +58,20 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [configs, dpaData, rules, wilayah] = await Promise.all([
+      const [configs, dpaData, rules, wilayah, jbData] = await Promise.all([
         getAllBidangConfigs(),
         getDpaMasterData(),
         getCostComponentRules(),
-        getNagekeoWilayah()
+        getNagekeoWilayah(),
+        getAllJenisBelanja()
       ]);
 
+      setBidangConfigs(configs);
       setDpaItems(dpaData.dpaList);
       setSppdRecords(dpaData.sppdList);
       setCostRules(rules);
       setWilayahList(wilayah);
+      setJenisBelanjaList(jbData);
 
       const allProps: Proposal[] = [];
       await Promise.all(
@@ -272,6 +278,9 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   // Standard Cost Breakdown based on Total Pagu DPA
   const costBreakdown = calculateBudgetBreakdown(totalPaguDpa, costRules);
 
+  // Pagu & Jenis Belanja Summary
+  const paguSummary = calculatePaguSummary(jenisBelanjaList, filteredProposals, bidangConfigs);
+
   const handlePrintAnalytics = () => {
     window.print();
   };
@@ -438,7 +447,169 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
         </div>
       </div>
 
-      {/* SECTION: SEBARAN WILAYAH & BIDANG */}
+      {/* SECTION: REKAPITULASI PAGU ANGGARAN PER JENIS BELANJA (DIINPUT ADMIN) */}
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-black uppercase">
+                Fitur Admin APBD / SIPD
+              </span>
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Coins className="w-5 h-5 text-amber-500" />
+                Rekapitulasi Pagu Anggaran per Jenis Belanja vs Realisasi Usulan
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500">
+              Pagu diinput oleh Admin untuk setiap Jenis Belanja. Sistem secara otomatis mengkalkulasi total pagu per bidang usulan dan serapan keseluruhan.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-3 shrink-0">
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">TOTAL PAGU ADMIN</span>
+              <span className="text-sm font-black text-amber-600 block">{formatRupiah(paguSummary.totalPaguKeseluruhan)}</span>
+            </div>
+            <div className="h-8 w-px bg-slate-200" />
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">TOTAL NOMINAL USULAN</span>
+              <span className="text-sm font-black text-blue-700 block">{formatRupiah(paguSummary.totalUsulanKeseluruhan)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabel Rekapitulasi Jenis Belanja */}
+        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-200">
+                <th className="py-3 px-4 w-12 text-center">No</th>
+                <th className="py-3 px-4 min-w-[200px]">Jenis Belanja / Pekerjaan</th>
+                <th className="py-3 px-4 min-w-[150px]">Kategori Belanja</th>
+                <th className="py-3 px-4 min-w-[160px] text-right bg-amber-50/80 text-amber-950 font-black border-x border-amber-200">
+                  Pagu Admin (Rp)
+                </th>
+                <th className="py-3 px-4 min-w-[160px] text-right text-blue-900 font-black">
+                  Total Usulan (Rp)
+                </th>
+                <th className="py-3 px-4 min-w-[140px] text-right">Sisa Pagu (Rp)</th>
+                <th className="py-3 px-4 min-w-[120px] text-center">Beban Serapan</th>
+                <th className="py-3 px-4 min-w-[130px] text-center">Status Pagu</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {paguSummary.summaryPerJenisBelanja.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-400 text-xs italic">
+                    Belum ada master Jenis Belanja yang diinput Admin.
+                  </td>
+                </tr>
+              ) : (
+                paguSummary.summaryPerJenisBelanja.map((row, idx) => {
+                  const isOver = row.status === 'Defisit / Over Budget';
+                  const isOptimal = row.status === 'Pas / Optimal';
+                  return (
+                    <tr key={row.item.id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-4 text-center font-bold text-slate-400">{idx + 1}</td>
+                      <td className="py-3 px-4">
+                        <div className="font-extrabold text-slate-900">{row.item.namaJenisBelanja}</div>
+                        <span className="text-[10px] text-slate-400 font-semibold">{row.countUsulan} usulan terkait</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">
+                          {row.item.kategori}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right bg-amber-50/40 border-x border-amber-200/80 font-black text-amber-900">
+                        {formatRupiah(row.totalPagu)}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-blue-700">
+                        {formatRupiah(row.totalUsulan)}
+                      </td>
+                      <td className={`py-3 px-4 text-right font-extrabold ${row.sisaPagu < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                        {formatRupiah(row.sisaPagu)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-slate-800 text-[11px]">{row.persenSerapan.toFixed(1)}%</span>
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${isOver ? 'bg-rose-500' : isOptimal ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${Math.min(row.persenSerapan, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black border ${
+                          isOver 
+                            ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                            : isOptimal 
+                            ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}>
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {paguSummary.summaryPerJenisBelanja.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-900 text-white font-black text-xs">
+                  <td colSpan={3} className="py-3 px-4 text-right uppercase tracking-wider">TOTAL KESELURUHAN</td>
+                  <td className="py-3 px-4 text-right text-amber-300 font-black">{formatRupiah(paguSummary.totalPaguKeseluruhan)}</td>
+                  <td className="py-3 px-4 text-right text-blue-300 font-black">{formatRupiah(paguSummary.totalUsulanKeseluruhan)}</td>
+                  <td className={`py-3 px-4 text-right font-black ${paguSummary.sisaPaguKeseluruhan < 0 ? 'text-rose-400' : 'text-emerald-300'}`}>
+                    {formatRupiah(paguSummary.sisaPaguKeseluruhan)}
+                  </td>
+                  <td colSpan={2} className="py-3 px-4 text-center text-slate-300 text-[11px]">
+                    Serapan Total: {paguSummary.persenSerapanKeseluruhan.toFixed(1)}%
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        {/* Breakdown Pagu Per Bidang Usulan */}
+        <div className="space-y-3 pt-2">
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-indigo-600" />
+            Kalkulasi Total Pagu vs Usulan per Unit Bidang
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {paguSummary.summaryPerBidang.map(b => (
+              <div key={b.bidang} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 hover:border-indigo-300 transition-colors">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="text-xs font-black text-slate-800">Bidang {b.bidang}</span>
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                    {b.persenSerapanBidang.toFixed(1)}% Usulan
+                  </span>
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Total Pagu Admin:</span>
+                    <span className="font-black text-amber-700">{formatRupiah(b.totalPaguBidang)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Usulan Terinput:</span>
+                    <span className="font-bold text-blue-700">{formatRupiah(b.totalUsulanBidang)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200/60 pt-1">
+                    <span className="text-slate-500 font-semibold">Sisa Pagu:</span>
+                    <span className={`font-black ${b.sisaPaguBidang < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                      {formatRupiah(b.sisaPaguBidang)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Usulan per Wilayah Kecamatan (7 Cols) */}
         <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">

@@ -11,7 +11,9 @@ import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, 
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
 import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2 } from 'lucide-react';
+import { JenisBelanjaItem } from '../types';
+import { getAllJenisBelanja } from '../services/jenisBelanjaService';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -50,11 +52,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [filterSumber, setFilterSumber] = useState('ALL');
   const [filterSipd, setFilterSipd] = useState('ALL');
 
+  // Master Jenis Belanja State
+  const [jenisBelanjaList, setJenisBelanjaList] = useState<JenisBelanjaItem[]>([]);
+
   // Form State
   const [formData, setFormData] = useState({
     tahunUsulan: '2025',
     jenisUsulan: 'Baru',
     sumberUsulan: 'Musrenbang Desa / Kelurahan',
+    jenisBelanja: '',
+    jenisBelanjaId: '',
     kecamatan: '',
     desa: '',
     programName: '',
@@ -224,12 +231,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [configsData, wData] = await Promise.all([
+        const [configsData, wData, jbData] = await Promise.all([
           getAllBidangConfigs(),
-          getNagekeoWilayah()
+          getNagekeoWilayah(),
+          getAllJenisBelanja()
         ]);
         setConfigs(configsData);
         setWilayahList(wData);
+        setJenisBelanjaList(jbData);
         if (!selectedBidangId && configsData.length > 0) {
           handleBidangSelect(configsData[0].id);
         }
@@ -689,6 +698,84 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* JENIS BELANJA & PAGU ANGGARAN ADMIN */}
+              <div className="md:col-span-3 bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-amber-700" />
+                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                      Klasifikasi Jenis Belanja & Pagu Anggaran Admin *
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300">
+                    Master Pagu Admin APBD / SIPD
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-amber-900 block mb-1">
+                      Pilih Jenis Belanja *
+                    </label>
+                    <select
+                      required
+                      value={formData.jenisBelanjaId || formData.jenisBelanja}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        const found = jenisBelanjaList.find(j => j.id === selectedId || j.namaJenisBelanja === selectedId);
+                        setFormData({
+                          ...formData,
+                          jenisBelanja: found ? found.namaJenisBelanja : selectedId,
+                          jenisBelanjaId: found ? found.id : selectedId
+                        });
+                      }}
+                      className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-900 bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    >
+                      <option value="">-- Pilih Jenis Belanja --</option>
+                      {jenisBelanjaList.map(j => (
+                        <option key={j.id} value={j.id}>
+                          [{j.kategori}] {j.namaJenisBelanja} (Pagu Admin: {formatRupiah(j.paguAnggaran)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Display Selected Jenis Belanja Summary Badge */}
+                  <div>
+                    {(() => {
+                      const selectedItem = jenisBelanjaList.find(j => j.id === formData.jenisBelanjaId || j.namaJenisBelanja === formData.jenisBelanja);
+                      if (!selectedItem) {
+                        return (
+                          <div className="h-full border border-dashed border-amber-300 rounded-xl p-3 flex items-center justify-center text-center text-xs text-amber-800/70 font-medium">
+                            Silakan pilih Jenis Belanja di sebelah kiri untuk melihat pagu & rentang harga SSH.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="bg-white border border-amber-300 rounded-xl p-3 space-y-1 text-xs">
+                          <div className="flex items-center justify-between font-black text-amber-950">
+                            <span className="truncate pr-2">{selectedItem.namaJenisBelanja}</span>
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded font-bold text-[10px] shrink-0">
+                              {selectedItem.satuanDefault || 'Paket'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-500 font-bold">Total Pagu Admin:</span>
+                            <span className="font-black text-emerald-700">{formatRupiah(selectedItem.paguAnggaran)}</span>
+                          </div>
+                          {selectedItem.rentangHargaDefault && (
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-slate-500 font-bold">Rentang SSH:</span>
+                              <span className="font-bold text-slate-700">{selectedItem.rentangHargaDefault}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
 
               {/* WILAYAH: KECAMATAN & DESA SE-KAB NAGEKEO (MULTI-SELECT SUPPORTED) */}

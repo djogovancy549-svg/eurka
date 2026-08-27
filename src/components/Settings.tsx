@@ -27,6 +27,7 @@ import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/
 import { formatRupiah } from '../utils';
 import BudgetRulesManager from './BudgetRulesManager';
 import SecurityMaintenance from './SecurityMaintenance';
+import JenisBelanjaManager from './JenisBelanjaManager';
 
 interface SettingsProps {
   userEmail?: string;
@@ -35,7 +36,7 @@ interface SettingsProps {
 }
 
 export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userName = 'Administrator ', isAdmin = true }: SettingsProps) {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'wilayah_bidang' | 'cost_rules' | 'security' | 'requirements'>('cost_rules');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'jenis_belanja' | 'cost_rules' | 'security' | 'wilayah_bidang' | 'requirements'>('jenis_belanja');
 
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -280,6 +281,16 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
       {/* Main Tab Navigation */}
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
         <button
+          onClick={() => setActiveSettingsTab('jenis_belanja')}
+          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'jenis_belanja'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Coins className="w-4 h-4 text-amber-500" /> Pagu & Master Jenis Belanja
+        </button>
+        <button
           onClick={() => setActiveSettingsTab('cost_rules')}
           className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeSettingsTab === 'cost_rules'
@@ -320,6 +331,11 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
           <FileCheck2 className="w-4 h-4" /> Syarat Kelayakan Dokumen
         </button>
       </div>
+
+      {/* TAB 0: PAGU & JENIS BELANJA MANAGER */}
+      {activeSettingsTab === 'jenis_belanja' && (
+        <JenisBelanjaManager userEmail={userEmail} isAdmin={isAdmin} />
+      )}
 
       {/* TAB 1: COST RULES & PERCENTAGES */}
       {activeSettingsTab === 'cost_rules' && (

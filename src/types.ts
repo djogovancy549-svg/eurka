@@ -30,6 +30,19 @@ export const SUMBER_DANA_LIST = [
   'Pinjaman / Hibah / Lainnya'
 ];
 export type SipdStatus = 'draft' | 'siap_sipd' | 'sudah_sipd' | 'ditolak_sipd';
+export interface JenisBelanjaItem {
+  id: string;
+  kodeBelanja?: string;
+  namaJenisBelanja: string; // E.g. 'Aplikasi Internal Basic', 'Belanja Modal Jalan', etc.
+  kategori: string; // E.g. 'Belanja Modal Perangkat Lunak', 'Belanja Sewa Cloud', 'Belanja Modal Infrastruktur PUPR'
+  paguAnggaran: number; // Pagu Anggaran yang diinput Admin
+  paguPerBidang?: Record<string, number>; // Allocations per Bidang { "SDA": 500000000, "BM": 1000000000 }
+  satuanDefault?: string; // E.g. Paket, Tahun, Unit, Meter
+  rentangHargaDefault?: string; // E.g. '25.000.000 - 50.000.000'
+  keterangan?: string;
+  updatedAt?: string;
+}
+
 export interface BudgetRule {
   programName: string;
   maxPercentage: number; // e.g. 35 for 35%
@@ -50,6 +63,8 @@ export interface Proposal {
   rowIndex?: number;
   projectName: string;
   sshId?: string;
+  jenisBelanja?: string; // Nama / Kategori Jenis Belanja yang dipilih
+  jenisBelanjaId?: string; // ID Jenis Belanja
   programName?: string;
   activityName?: string;
   tahunUsulan?: string;
