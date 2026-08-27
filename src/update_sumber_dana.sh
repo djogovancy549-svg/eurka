@@ -1,0 +1,1 @@
+sed -i "s/'DAU (Dana Alokasi Umum)',/'Pajak Daerah',\n  'Lain-lain PAD Yang Sah',\n  'Dana Alokasi Umum (DAU)',\n  'Opsen PKB',\n  'Pendapatan Bagi Hasil Pajak Kendaraan Bermotor',\n  'DAU Earmark \/ Spesifik (PUPR\/Kelurahan)',/g" src/types.ts

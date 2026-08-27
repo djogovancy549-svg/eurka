@@ -2,13 +2,11 @@
 // Anda dapat menambahkan lebih dari satu email admin, pisahkan dengan koma:
 // export const ADMIN_EMAILS = ['admin1@gmail.com', 'admin2@gmail.com'];
 export const ADMIN_EMAILS = ['djogovancy549@gmail.com'];
-
 export const BIDANG_LIST = [
   'SDA', 'PL', 'CK', 'BM', 'Tata Ruang', 'Sekretariat',
   'Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)', 'RENJA (OPD/Dinas)'
 ];
 export const NON_BIDANG_UNITS = ['Kecamatan', 'Desa', 'Kelurahan / Lurah', 'POKIR (DPRD)', 'RENJA (OPD/Dinas)'];
-
 export const SUMBER_USULAN_OPTIONS = [
   'Musrenbang Desa / Kelurahan',
   'Musrenbang Kecamatan',
@@ -16,9 +14,12 @@ export const SUMBER_USULAN_OPTIONS = [
   'RENJA Perangkat Daerah / OPD',
   'Bidang Teknis Internal DPUPR'
 ];
-
 export const SUMBER_DANA_LIST = [
-  'DAU (Dana Alokasi Umum)',
+  'Pajak Daerah',
+  'Lain-lain PAD Yang Sah',
+  'Dana Alokasi Umum (DAU)',
+  'Opsen PKB',
+  'Pendapatan Bagi Hasil Pajak Kendaraan Bermotor',
   'DAU Earmark / Spesifik (PUPR/Kelurahan)',
   'DAK Fisik (Dana Alokasi Khusus)',
   'DAK Non-Fisik',
@@ -28,14 +29,11 @@ export const SUMBER_DANA_LIST = [
   'Dana Desa (APBDes / APBN)',
   'Pinjaman / Hibah / Lainnya'
 ];
-
 export type SipdStatus = 'draft' | 'siap_sipd' | 'sudah_sipd' | 'ditolak_sipd';
-
 export interface BudgetRule {
   programName: string;
   maxPercentage: number; // e.g. 35 for 35%
 }
-
 export interface BidangConfig {
   id: string; // e.g., 'SDA', 'Kecamatan', etc.
   name: string;
@@ -47,7 +45,6 @@ export interface BidangConfig {
   budgetRules?: BudgetRule[];
   customRequirements?: Requirement[];
 }
-
 export interface Proposal {
   id: string;
   rowIndex?: number;
@@ -91,12 +88,10 @@ export interface Proposal {
   priorityScore?: number; // Nilai 0 - 100
   priorityCriteria?: PriorityCriteria;
 }
-
 // ==========================================
 // SKALA PRIORITAS & INDIKATOR PELAKSANAAN
 // ==========================================
 export type PriorityLevel = 'P1' | 'P2' | 'P3' | 'P4';
-
 export interface PriorityLevelMeta {
   code: PriorityLevel;
   label: string;
@@ -108,7 +103,6 @@ export interface PriorityLevelMeta {
   ringClass: string;
   executionPhase: string;
 }
-
 export const PRIORITY_LEVELS: Record<PriorityLevel, PriorityLevelMeta> = {
   P1: {
     code: 'P1',
@@ -155,7 +149,6 @@ export const PRIORITY_LEVELS: Record<PriorityLevel, PriorityLevelMeta> = {
     executionPhase: 'Tahap 4 (Cadangan / Perubahan)'
   }
 };
-
 export interface PriorityCriteria {
   urgensiKondisi: number; // 1-5 (Bobot 30%): Tingkat Kerusakan/Bahaya Fisik
   kesiapanDokumen: number; // 1-5 (Bobot 25%): Kesiapan Lahan Bebas Sengketa & DED/RAB
@@ -167,7 +160,6 @@ export interface PriorityCriteria {
   evaluatedBy?: string;
   evaluatedAt?: string;
 }
-
 export function computePriorityScore(
   urgensi: number,
   kesiapan: number,
@@ -183,23 +175,19 @@ export function computePriorityScore(
   const k = Math.min(5, Math.max(1, kesiapan || 1));
   const d = Math.min(5, Math.max(1, dampak || 1));
   const r = Math.min(5, Math.max(1, rpjmd || 1));
-
   const score = Math.round(
     (u / 5) * 30 +
     (k / 5) * 25 +
     (d / 5) * 25 +
     (r / 5) * 20
   );
-
   let level: PriorityLevel = 'P4';
   if (score >= 80) level = 'P1';
   else if (score >= 65) level = 'P2';
   else if (score >= 50) level = 'P3';
   else level = 'P4';
-
   return { totalScore: score, level };
 }
-
 export interface RenjaProgram {
   id: string;
   kodeProgram: string;
@@ -210,7 +198,6 @@ export interface RenjaProgram {
   paguProgram: number;
   tahun: string;
 }
-
 export interface RenjaKegiatan {
   id: string;
   programId: string;
@@ -222,7 +209,6 @@ export interface RenjaKegiatan {
   paguKegiatan?: number;
   tahun: string;
 }
-
 export interface RenjaSubKegiatan {
   id: string;
   programId: string;
@@ -243,11 +229,9 @@ export interface RenjaSubKegiatan {
   priorityLevel?: PriorityLevel;
   priorityScore?: number;
 }
-
 export const DEFAULT_RENJA_PROGRAMS: RenjaProgram[] = [];
 export const DEFAULT_RENJA_KEGIATAN: RenjaKegiatan[] = [];
 export const DEFAULT_RENJA_SUB_KEGIATAN: RenjaSubKegiatan[] = [];
-
 // ==========================================
 // PENGATURAN BESARAN & SYARAT BIAYA (COST RULES)
 // ==========================================
@@ -262,7 +246,6 @@ export interface CostComponentRule {
   isActive: boolean;
   formulaBasis: 'total_pagu' | 'pagu_fisik';
 }
-
 export const DEFAULT_COST_COMPONENT_RULES: CostComponentRule[] = [
   {
     id: 'cost_fisik',
@@ -368,7 +351,6 @@ export const DEFAULT_COST_COMPONENT_RULES: CostComponentRule[] = [
     formulaBasis: 'total_pagu'
   }
 ];
-
 // ==========================================
 // NOTIFIKASI SISTEM & AUDIT KEAMANAN
 // ==========================================
@@ -384,7 +366,6 @@ export interface AppNotification {
   createdAt: string;
   metaData?: Record<string, any>;
 }
-
 export interface SecurityAuditLog {
   id: string;
   action: string;
@@ -397,11 +378,9 @@ export interface SecurityAuditLog {
   userAgent?: string;
   timestamp: string;
 }
-
 // ==========================================
 // DPA (DOKUMEN PELAKSANAAN ANGGARAN) & SPPD
 // ==========================================
-
 export interface DpaItem {
   id: string;
   tahun: string;
@@ -424,7 +403,6 @@ export interface DpaItem {
   priorityScore?: number;
   updatedAt: string;
 }
-
 export interface SppdRecord {
   id: string;
   dpaItemId?: string; // ID Sub-Kegiatan DPA terkait
@@ -457,21 +435,18 @@ export interface SppdRecord {
   createdAt: string;
   updatedAt: string;
 }
-
 export interface Requirement {
   id: string;
   label: string;
   description: string;
   required?: boolean;
 }
-
 export const defaultRequirements: Requirement[] = [
   { id: 'req_1', label: 'Kesesuaian dengan RTRW', description: 'Usulan harus sesuai dengan Rencana Tata Ruang Wilayah (RTRW) Kabupaten Nagekeo.' },
   { id: 'req_2', label: 'Studi Kelayakan (Feasibility Study)', description: 'Terdapat dokumen studi kelayakan untuk proyek fisik besar.' },
   { id: 'req_3', label: 'DED (Detail Engineering Design)', description: 'Dokumen DED sudah tersedia.' },
   { id: 'req_4', label: 'Kesesuaian RPJMD', description: 'Mendukung target RPJMD Kabupaten Nagekeo.' },
 ];
-
 export const defaultNonBidangRequirements: Record<string, Requirement[]> = {
   'Kecamatan': [
     { id: 'req_kec_1', label: 'Berita Acara Musrenbang Kecamatan', description: 'Terdapat lampiran Berita Acara Musrenbang tingkat Kecamatan.' },
@@ -499,7 +474,6 @@ export const defaultNonBidangRequirements: Record<string, Requirement[]> = {
     { id: 'req_renja_3', label: 'Analisis Standar Biaya & Kelayakan Anggaran', description: 'Rincian anggaran telah memenuhi Standar Satuan Harga (SSH) Nagekeo.' }
   ]
 };
-
 export function getUnitActiveRequirements(config: BidangConfig | null, defaultGlobalReqs: Requirement[]): Requirement[] {
   if (!config) return defaultGlobalReqs;
   if (config.customRequirements && config.customRequirements.length > 0) {

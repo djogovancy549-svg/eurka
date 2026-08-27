@@ -393,14 +393,17 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
   const sumberDanaStats = React.useMemo(() => {
     const map: Record<string, { totalPagu: number; count: number; urkCount: number; urkBudget: number }> = {};
     renjaData.subKegiatan.forEach(sub => {
-      const sd = sub.sumberDana || 'DAU';
-      if (!map[sd]) map[sd] = { totalPagu: 0, count: 0, urkCount: 0, urkBudget: 0 };
-      map[sd].totalPagu += (Number(sub.paguSubKegiatan) || 0);
-      map[sd].count += 1;
-      
-      const linkedUrks = allProposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
-      map[sd].urkCount += linkedUrks.length;
-      map[sd].urkBudget += linkedUrks.reduce((a, b) => a + (b.renjaPaguAlokasi || b.estimatedBudget || 0), 0);
+      const sources = (sub.sumberDana || 'DAU').split(',').map(s => s.trim()).filter(Boolean);
+      sources.forEach(sd => {
+        if (!map[sd]) map[sd] = { totalPagu: 0, count: 0, urkCount: 0, urkBudget: 0 };
+        // Divvy up pagu for stats or assign full? Let's assign full so they see the impact
+        map[sd].totalPagu += (Number(sub.paguSubKegiatan) || 0) / sources.length;
+        map[sd].count += 1;
+        
+        const linkedUrks = allProposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
+        map[sd].urkCount += linkedUrks.length;
+        map[sd].urkBudget += linkedUrks.reduce((a, b) => a + (b.renjaPaguAlokasi || b.estimatedBudget || 0), 0) / sources.length;
+      });
     });
     return map;
   }, [renjaData.subKegiatan, allProposals]);
@@ -410,7 +413,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
 
     const progSubs = renjaData.subKegiatan.filter(s => s.programId === p.id);
     if (selectedSumberDana !== 'Semua') {
-      const hasMatchingSub = progSubs.some(s => (s.sumberDana || 'DAU') === selectedSumberDana);
+      const hasMatchingSub = progSubs.some(s => (s.sumberDana || 'DAU').includes(selectedSumberDana));
       if (!hasMatchingSub) return false;
     }
 
@@ -1166,17 +1169,33 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Sumber Dana</label>
-                  <select
-                    value={newSubKegiatan.sumberDana}
-                    onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, sumberDana: e.target.value }))}
-                    className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {SUMBER_DANA_LIST.map(sd => (
-                      <option key={sd} value={sd}>{sd}</option>
-                    ))}
-                  </select>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-2">Sumber Dana (Bisa pilih lebih dari satu)</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                    {SUMBER_DANA_LIST.map(sd => {
+                      const currentSd = newSubKegiatan.sumberDana || '';
+                      const isSelected = currentSd.includes(sd);
+                      return (
+                        <label key={sd} className="flex items-start gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer p-1 hover:bg-slate-100 rounded">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              let currentList = currentSd ? currentSd.split(', ').filter(Boolean) : [];
+                              if (e.target.checked) {
+                                if (!currentList.includes(sd)) currentList.push(sd);
+                              } else {
+                                currentList = currentList.filter(s => s !== sd);
+                              }
+                              setNewSubKegiatan(prev => ({ ...prev, sumberDana: currentList.join(', ') }));
+                            }}
+                            className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="leading-tight">{sd}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Pagu Sub-Kegiatan (Rp)</label>

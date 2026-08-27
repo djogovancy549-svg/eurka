@@ -188,13 +188,15 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   // Group by Sumber Dana DPA
   const sumberDanaDpaMap: Record<string, { count: number; pagu: number; realisasi: number }> = {};
   filteredDpa.forEach(d => {
-    const sd = d.sumberDana || 'DAU';
-    if (!sumberDanaDpaMap[sd]) {
-      sumberDanaDpaMap[sd] = { count: 0, pagu: 0, realisasi: 0 };
-    }
-    sumberDanaDpaMap[sd].count += 1;
-    sumberDanaDpaMap[sd].pagu += (d.paguDpa || 0);
-    sumberDanaDpaMap[sd].realisasi += (d.realisasiKeuangan || 0);
+    const sources = (d.sumberDana || 'DAU').split(',').map(s => s.trim()).filter(Boolean);
+    sources.forEach(sd => {
+      if (!sumberDanaDpaMap[sd]) {
+        sumberDanaDpaMap[sd] = { count: 0, pagu: 0, realisasi: 0 };
+      }
+      sumberDanaDpaMap[sd].count += 1;
+      sumberDanaDpaMap[sd].pagu += (d.paguDpa || 0) / sources.length;
+      sumberDanaDpaMap[sd].realisasi += (d.realisasiKeuangan || 0) / sources.length;
+    });
   });
 
   // Group by SIPD Status

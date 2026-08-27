@@ -376,7 +376,7 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
   const filteredDpaList = useMemo(() => {
     return dpaList.filter(item => {
       if (selectedBidang !== 'Semua' && item.bidangPengampu !== selectedBidang) return false;
-      if (selectedSumberDana !== 'Semua' && item.sumberDana !== selectedSumberDana) return false;
+      if (selectedSumberDana !== 'Semua' && !(item.sumberDana || 'DAU').includes(selectedSumberDana)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchCode = item.kodeSubKegiatan.toLowerCase().includes(q);
@@ -392,7 +392,7 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
   const filteredSppdList = useMemo(() => {
     return sppdList.filter(s => {
       if (selectedBidang !== 'Semua' && s.bidangPengampu !== selectedBidang) return false;
-      if (selectedSumberDana !== 'Semua' && s.sumberDana !== selectedSumberDana) return false;
+      if (selectedSumberDana !== 'Semua' && !(s.sumberDana || 'DAU').includes(selectedSumberDana)) return false;
       if (selectedStatusSppd !== 'Semua' && s.statusPencairan !== selectedStatusSppd) return false;
       if (selectedJenisSppd !== 'Semua' && s.jenisPerjalanan !== selectedJenisSppd) return false;
       if (searchQuery.trim()) {
@@ -425,10 +425,12 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
     // Per sumber dana
     const sdMap: Record<string, { pagu: number; realisasi: number }> = {};
     currentDpa.forEach(d => {
-      const sd = d.sumberDana || 'DAU';
-      if (!sdMap[sd]) sdMap[sd] = { pagu: 0, realisasi: 0 };
-      sdMap[sd].pagu += (d.paguDpa || 0);
-      sdMap[sd].realisasi += (d.realisasiKeuangan || 0);
+      const sources = (d.sumberDana || 'DAU').split(',').map(s => s.trim()).filter(Boolean);
+      sources.forEach(sd => {
+        if (!sdMap[sd]) sdMap[sd] = { pagu: 0, realisasi: 0 };
+        sdMap[sd].pagu += (d.paguDpa || 0) / sources.length;
+        sdMap[sd].realisasi += (d.realisasiKeuangan || 0) / sources.length;
+      });
     });
 
     return {
@@ -745,7 +747,7 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
             >
               <option value="Semua">Semua Sumber Dana</option>
               {SUMBER_DANA_LIST.map(sd => (
-                <option key={sd} value={sd.split(' ')[0]}>{sd}</option>
+                <option key={sd} value={sd}>{sd}</option>
               ))}
             </select>
 
@@ -1152,17 +1154,33 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Sumber Dana</label>
-                  <select
-                    value={dpaForm.sumberDana}
-                    onChange={e => setDpaForm({ ...dpaForm, sumberDana: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-                  >
-                    {SUMBER_DANA_LIST.map(sd => (
-                      <option key={sd} value={sd.split(' ')[0]}>{sd}</option>
-                    ))}
-                  </select>
+                <div className="md:col-span-2">
+                  <label className="font-bold text-slate-700 block mb-2">Sumber Dana (Bisa pilih lebih dari satu)</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                    {SUMBER_DANA_LIST.map(sd => {
+                      const currentSd = dpaForm.sumberDana || '';
+                      const isSelected = currentSd.includes(sd);
+                      return (
+                        <label key={sd} className="flex items-start gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer p-1 hover:bg-slate-100 rounded">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              let currentList = currentSd ? currentSd.split(', ').filter(Boolean) : [];
+                              if (e.target.checked) {
+                                if (!currentList.includes(sd)) currentList.push(sd);
+                              } else {
+                                currentList = currentList.filter(s => s !== sd);
+                              }
+                              setDpaForm(prev => ({ ...prev, sumberDana: currentList.join(', ') }));
+                            }}
+                            className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="leading-tight">{sd}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
