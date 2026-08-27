@@ -8,7 +8,7 @@ import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagek
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X } from 'lucide-react';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -283,6 +283,26 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const handleBidangSelect = (id: string) => {
     setSelectedBidangId(id);
     localStorage.setItem('urk_selected_bidang', id);
+  };
+
+  const handleDelete = async (rowIndex: number) => {
+    if (!selectedConfig?.sheetId) return;
+    if (!window.confirm('Yakin ingin menghapus usulan ini? Aksi ini tidak dapat dibatalkan.')) return;
+
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const { deleteProposalRow } = await import('../sheetsApi');
+      await deleteProposalRow(token, selectedConfig.sheetId, rowIndex);
+      
+      setSuccessMsg('Data usulan berhasil dihapus.');
+      setTimeout(() => setSuccessMsg(null), 3000);
+      await fetchProposals(selectedConfig.sheetId);
+    } catch (err) {
+      console.error('Failed to delete proposal', err);
+      alert('Gagal menghapus data usulan.');
+    }
   };
 
   const fetchProposals = async (sheetId?: string) => {
@@ -889,9 +909,19 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           <h3 className="font-bold text-slate-900 text-sm">
             Daftar Usulan Rencana Kerja ({filteredProposals.length} item)
           </h3>
-          <span className="text-xs text-slate-500">
-            Penyimpanan: Google Sheet ({selectedConfig?.name || 'Unit'})
-          </span>
+          <div className="flex items-center gap-3">
+            {selectedConfig?.sheetId && (
+              <a
+                href={`https://docs.google.com/spreadsheets/d/${selectedConfig.sheetId}/edit`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline bg-blue-50 px-2 py-1 rounded-lg"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Buka Sheet ({selectedConfig.name})
+              </a>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -966,12 +996,21 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                       {renderSipdBadge(p.sipdStatus, p.sipdRegistrationNo)}
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => setSelectedProposalDetail(p)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                      >
-                        Detail
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => setSelectedProposalDetail(p)}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          Detail
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.rowIndex!)}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                          title="Hapus Data"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

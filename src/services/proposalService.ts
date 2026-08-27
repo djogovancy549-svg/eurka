@@ -1,9 +1,25 @@
 import { Proposal, SipdStatus, PriorityLevel, PriorityCriteria } from '../types';
 import { getAccessToken } from '../auth';
-import { getRows } from '../sheetsApi';
+import { getRows, deleteProposalRow } from '../sheetsApi';
 import { parseMoney } from '../utils';
 import { getRenjaMasterData } from './renjaService';
 import { getAllPriorityEvaluations } from './priorityService';
+
+/**
+ * Delete a proposal by its rowIndex
+ */
+export async function deleteProposal(spreadsheetId: string, rowIndex: number): Promise<boolean> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return false;
+    
+    await deleteProposalRow(token, spreadsheetId, rowIndex);
+    return true;
+  } catch (err) {
+    console.error(`Failed to delete proposal at row ${rowIndex}:`, err);
+    return false;
+  }
+}
 
 /**
  * Fetch proposals for a specific Bidang/Unit given its sheetId

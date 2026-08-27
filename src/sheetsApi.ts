@@ -240,14 +240,43 @@ export const updateCell = async (accessToken: string, spreadsheetId: string, ran
   }
 };
 
-export const clearRange = async (accessToken: string, spreadsheetId: string, range: string) => {
-  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:clear`, {
+export const deleteProposalRow = async (accessToken: string, spreadsheetId: string, rowIndex: number) => {
+  // 1. Get the sheetId for 'Proposals'
+  const metaResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  if (!metaResponse.ok) throw new Error('Failed to fetch spreadsheet metadata');
+  const meta = await metaResponse.json();
+  const proposalsSheetId = meta.sheets.find((s: any) => s.properties.title === 'Proposals')?.properties.sheetId;
+  
+  if (proposalsSheetId === undefined) {
+    throw new Error('Proposals sheet not found');
+  }
+
+  // 2. Delete the row
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
-    }
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: proposalsSheetId,
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }
+      ]
+    })
   });
+  
   if (!response.ok) {
-    throw new Error(`Failed to clear range ${range}`);
+    throw new Error(`Failed to delete row ${rowIndex}`);
   }
 };
