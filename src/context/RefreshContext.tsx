@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { db } from '../firebase';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 type RefreshHandler = () => Promise<void> | void;
 
@@ -10,6 +12,7 @@ interface RefreshContextType {
   triggerRefresh: (customMessage?: string) => Promise<void>;
   registerRefreshHandler: (id: string, handler: RefreshHandler) => void;
   unregisterRefreshHandler: (id: string) => void;
+  notifyGlobalSync: () => Promise<void>;
 }
 
 const RefreshContext = createContext<RefreshContextType | undefined>(undefined);
@@ -21,6 +24,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [refreshSuccessMsg, setRefreshSuccessMsg] = useState<string | null>(null);
   
   const handlersRef = useRef<Map<string, RefreshHandler>>(new Map());
+  const localLastSyncRef = useRef<number>(0);
 
   const registerRefreshHandler = useCallback((id: string, handler: RefreshHandler) => {
     handlersRef.current.set(id, handler);
@@ -74,6 +78,38 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [isRefreshing]);
 
+  const notifyGlobalSync = useCallback(async () => {
+    try {
+      const docRef = doc(db, 'appConfig', 'globalSyncState');
+      const now = Date.now();
+      localLastSyncRef.current = now; // update local ref first to ignore this specific trigger on this current screen
+      await setDoc(docRef, { lastUpdated: now });
+    } catch (err) {
+      console.error('Failed to notify global sync:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const docRef = doc(db, 'appConfig', 'globalSyncState');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const serverTimestamp = data?.lastUpdated || 0;
+        if (serverTimestamp && serverTimestamp > localLastSyncRef.current) {
+          localLastSyncRef.current = serverTimestamp;
+          // Trigger local refresh across the current UI
+          triggerRefresh('Sistem terdeteksi berubah! Menyegarkan otomatis...');
+        }
+      }
+    }, (error) => {
+      console.warn('Real-time global sync listener warning:', error);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [triggerRefresh]);
+
   return (
     <RefreshContext.Provider
       value={{
@@ -84,6 +120,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({ child
         triggerRefresh,
         registerRefreshHandler,
         unregisterRefreshHandler,
+        notifyGlobalSync,
       }}
     >
       {children}

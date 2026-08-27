@@ -11,7 +11,7 @@ import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, 
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
 import { getAllPriorityEvaluations } from '../services/priorityService';
 import { addNotification } from '../services/notificationService';
-import { useRegisterRefresh } from '../context/RefreshContext';
+import { useRegisterRefresh, useRefresh } from '../context/RefreshContext';
 import PriorityScoringModal from './PriorityScoringModal';
 import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Plus, Trash2, ShieldCheck, Tag, Users, Layers, X, CheckSquare, Award, Sliders } from 'lucide-react';
 
@@ -21,6 +21,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ userEmail, userName }: AdminDashboardProps) {
+  const { notifyGlobalSync } = useRefresh();
   const { requirements } = useRequirements();
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>('');
@@ -108,6 +109,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setProposals(proposals.map(p => p.id === proposal.id ? { ...p, zoomLink: tempZoomLink } : p));
       setEditingZoomId(null);
       setSuccessMsg('Tautan meeting berhasil diperbarui.');
+      await notifyGlobalSync();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       console.error('Failed to update zoom link', err);
@@ -136,6 +138,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         });
       } catch (e) {}
 
+      await notifyGlobalSync();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (e) {
       console.error('Failed to update status', e);
@@ -151,6 +154,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setProposals(proposals.map(p => p.id === proposal.id ? { ...p, adminNotes: tempNotes } : p));
       setEditingNotesId(null);
       setSuccessMsg('Catatan admin berhasil disimpan');
+      await notifyGlobalSync();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (e) {
       console.error('Failed to save notes', e);
@@ -193,6 +197,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
         });
       } catch (e) {}
 
+      await notifyGlobalSync();
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (e) {
       console.error('Failed to update SIPD status', e);
@@ -339,6 +344,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setEditingConfig(false);
       fetchProposals(updated.sheetId);
       setSuccessMsg('Konfigurasi unit berhasil disimpan!');
+      await notifyGlobalSync();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       alert('Gagal menyimpan konfigurasi.');
@@ -359,6 +365,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       setSuccessMsg('Data usulan berhasil dihapus.');
       setTimeout(() => setSuccessMsg(null), 3000);
       await fetchProposals(selectedConfig.sheetId);
+      await notifyGlobalSync();
     } catch (err: any) {
       console.error('Failed to delete proposal', err);
       const msg = err?.message || String(err);

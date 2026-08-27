@@ -1,6 +1,7 @@
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { RenjaProgram, RenjaKegiatan, RenjaSubKegiatan, Proposal } from '../types';
+import { triggerGlobalSync } from './syncService';
 
 const withTimeout = <T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> => {
   return Promise.race([
@@ -171,6 +172,7 @@ export const saveRenjaMasterData = async (programs: RenjaProgram[], kegiatan: Re
       8000,
       undefined
     );
+    await triggerGlobalSync();
   } catch (e) {
     console.warn('Saved RENJA locally, Firestore sync delayed:', e);
   }

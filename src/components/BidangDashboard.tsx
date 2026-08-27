@@ -9,7 +9,7 @@ import { getProposalsByBidang } from '../services/proposalService';
 import { addNotification } from '../services/notificationService';
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
-import { useRegisterRefresh } from '../context/RefreshContext';
+import { useRegisterRefresh, useRefresh } from '../context/RefreshContext';
 import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
 import { JenisBelanjaItem, SumberDanaItem, SshItem, RenjaSubKegiatan, RenjaProgram } from '../types';
 import { getAllJenisBelanja } from '../services/jenisBelanjaService';
@@ -25,6 +25,7 @@ interface BidangDashboardProps {
 }
 
 export default function BidangDashboard({ userEmail, userName }: BidangDashboardProps) {
+  const { notifyGlobalSync } = useRefresh();
   const { requirements } = useRequirements();
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [selectedBidangId, setSelectedBidangId] = useState<string>(localStorage.getItem('urk_selected_bidang') || '');
@@ -460,6 +461,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setSuccessMsg('Data usulan berhasil dihapus.');
       setTimeout(() => setSuccessMsg(null), 3000);
       await fetchProposals(selectedConfig.sheetId);
+      await notifyGlobalSync();
     } catch (err: any) {
       console.error('Failed to delete proposal', err);
       const msg = err?.message || String(err);
@@ -692,6 +694,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       setPokirList([]);
       setAttachments([]);
       fetchProposals(configToUse.sheetId);
+      await notifyGlobalSync();
       setSuccessMsg('Usulan berhasil dikirim sebagai data pra-SIPD!');
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (err: any) {
