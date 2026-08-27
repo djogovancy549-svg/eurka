@@ -42,7 +42,8 @@ export interface BidangConfig {
   pagu: number; // Total Pagu Indikatif
   paguPerSumberDana?: Record<string, number>; // Pemisahan Pagu Indikatif per Sumber Dana (e.g. { "DAU": 5000000000, "DAK Fisik": 10000000000 })
   sheetId: string;
-  folderUrl: string;
+  folderUrl?: string;
+  driveUrl?: string;
   budgetRules?: BudgetRule[];
   customRequirements?: Requirement[];
 }
@@ -78,6 +79,8 @@ export interface Proposal {
   isAkomodirRenja?: boolean;
   renjaProgramId?: string;
   renjaProgramName?: string;
+  renjaKegiatanId?: string;
+  renjaKegiatanName?: string;
   renjaSubKegiatanId?: string;
   renjaSubKegiatanName?: string;
   renjaPaguAlokasi?: number;
@@ -95,9 +98,24 @@ export interface RenjaProgram {
   tahun: string;
 }
 
+export interface RenjaKegiatan {
+  id: string;
+  programId: string;
+  kodeKegiatan: string;
+  namaKegiatan: string;
+  bidangPengampu: string;
+  indikatorKegiatan?: string;
+  targetKinerja?: string;
+  paguKegiatan?: number;
+  tahun: string;
+}
+
 export interface RenjaSubKegiatan {
   id: string;
   programId: string;
+  kegiatanId?: string;
+  kodeKegiatan?: string;
+  namaKegiatan?: string;
   kodeSubKegiatan: string;
   namaSubKegiatan: string;
   indikatorSubKegiatan: string;
@@ -112,8 +130,158 @@ export interface RenjaSubKegiatan {
 }
 
 export const DEFAULT_RENJA_PROGRAMS: RenjaProgram[] = [];
-
+export const DEFAULT_RENJA_KEGIATAN: RenjaKegiatan[] = [];
 export const DEFAULT_RENJA_SUB_KEGIATAN: RenjaSubKegiatan[] = [];
+
+// ==========================================
+// PENGATURAN BESARAN & SYARAT BIAYA (COST RULES)
+// ==========================================
+export interface CostComponentRule {
+  id: string;
+  name: string;
+  category: 'perencanaan' | 'pengawasan' | 'operasional' | 'atk' | 'sppd' | 'fisik' | 'lainnya';
+  defaultPercentage: number;
+  maxPercentage: number;
+  description: string;
+  requirements: string[];
+  isActive: boolean;
+  formulaBasis: 'total_pagu' | 'pagu_fisik';
+}
+
+export const DEFAULT_COST_COMPONENT_RULES: CostComponentRule[] = [
+  {
+    id: 'cost_fisik',
+    name: 'Pekerjaan Konstruksi / Fisik Utama',
+    category: 'fisik',
+    defaultPercentage: 80.0,
+    maxPercentage: 95.0,
+    description: 'Pagu utama pelaksanaan konstruksi/pembangunan infrastruktur fisik di lapangan.',
+    requirements: [
+      'Tersedia Gambar Kerja / Detail Engineering Design (DED)',
+      'Tersedia Rencana Anggaran Biaya (RAB) dan HPS yang disahkan PPK',
+      'Kesiapan Lokasi / Bebas Sengketa Lahan (Surat Pernyataan Hibah / Kepemilikan)'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_perencanaan',
+    name: 'Jasa Konsultansi Perencanaan (DED / Masterplan / FS)',
+    category: 'perencanaan',
+    defaultPercentage: 4.0,
+    maxPercentage: 6.0,
+    description: 'Biaya konsultan perencana penyusun DED, survei topografi, dan dokumen lelang.',
+    requirements: [
+      'Kerangka Acuan Kerja (KAK / TOR) Perencanaan disetujui PPK',
+      'Surat Perjanjian Kontrak Konsultansi Perencanaan',
+      'Laporan Pendahuluan, Antara, dan Laporan Akhir Perencanaan DED'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_pengawasan',
+    name: 'Jasa Konsultansi Pengawasan / Supervisi Lapangan',
+    category: 'pengawasan',
+    defaultPercentage: 3.5,
+    maxPercentage: 5.0,
+    description: 'Biaya konsultan pengawas teknis independen selama pelaksanaan konstruksi berlangsung.',
+    requirements: [
+      'Kerangka Acuan Kerja (KAK) Pengawasan / Supervisi Lapangan',
+      'Tenaga Ahli bersertifikat keahlian konstruksi (SKA / SKT)',
+      'Laporan Berkala Mingguan, Bulanan, dan Berita Acara MC-0 s/d MC-100'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_operasional',
+    name: 'Biaya Pengelolaan Kegiatan / Operasional PPK-PPTK',
+    category: 'operasional',
+    defaultPercentage: 3.0,
+    maxPercentage: 5.0,
+    description: 'Honorarium pengelola anggaran, rapat koordinasi teknis, dan administrasi tim pelaksana.',
+    requirements: [
+      'Surat Keputusan (SK) Pengguna Anggaran tentang Tim Pengelola Teknis / PPTK',
+      'Daftar Hadir & Notulensi Rapat Koordinasi Teknis Proyek',
+      'Kuitansi Riil Beban Operasional Sesuai Standar Satuan Harga (SSH)'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_atk',
+    name: 'Biaya ATK, Penggandaan & Administrasi Dokumen',
+    category: 'atk',
+    defaultPercentage: 1.5,
+    maxPercentage: 2.5,
+    description: 'Pembelian kertas, tinta printer, penggandaan dokumen kontrak, dan arsip resmi.',
+    requirements: [
+      'Nota dan Kuitansi Pembelian Resmi dari Toko/Penyedia',
+      'Faktur Pajak dan Tanda Terima Pembelian ATK'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_sppd',
+    name: 'Biaya Perjalanan Dinas (SPPD) Monitoring & Pengukuran',
+    category: 'sppd',
+    defaultPercentage: 2.5,
+    maxPercentage: 4.5,
+    description: 'Uang harian, BBM/transport, dan akomodasi tim teknis dinas untuk monitoring berkala ke lokasi proyek.',
+    requirements: [
+      'Surat Perintah Tugas (SPT) ditandatangani Kepala Dinas / PPK',
+      'Surat Perintah Perjalanan Dinas (SPPD) yang telah dilegalisir di lokasi tujuan',
+      'Laporan Hasil Perjalanan Dinas & Dokumentasi Foto Lapangan'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  },
+  {
+    id: 'cost_lainnya',
+    name: 'Biaya Penunjang Lainnya / General Overhead',
+    category: 'lainnya',
+    defaultPercentage: 1.0,
+    maxPercentage: 2.0,
+    description: 'Biaya uji laboratorium mutu beton/aspal, sounding tanah, papan proyek, dan sosialisasi masyarakat.',
+    requirements: [
+      'Hasil Pengujian Laboratorium Bahan yang terakreditasi',
+      'Berita Acara Sosialisasi bersama aparat desa & masyarakat'
+    ],
+    isActive: true,
+    formulaBasis: 'total_pagu'
+  }
+];
+
+// ==========================================
+// NOTIFIKASI SISTEM & AUDIT KEAMANAN
+// ==========================================
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'proposal_new' | 'proposal_status' | 'renja_linked' | 'dpa_updated' | 'sppd_submitted' | 'sppd_cair' | 'security_alert' | 'system_info';
+  targetRole: 'all' | 'admin' | 'user';
+  targetUserEmail?: string;
+  readBy: string[];
+  linkUrl?: string;
+  createdAt: string;
+  metaData?: Record<string, any>;
+}
+
+export interface SecurityAuditLog {
+  id: string;
+  action: string;
+  userEmail: string;
+  userName?: string;
+  category: 'auth' | 'proposal' | 'renja' | 'dpa' | 'sppd' | 'settings' | 'security';
+  details: string;
+  status: 'SUCCESS' | 'WARNING' | 'FAILED';
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp: string;
+}
 
 // ==========================================
 // DPA (DOKUMEN PELAKSANAAN ANGGARAN) & SPPD
@@ -125,6 +293,8 @@ export interface DpaItem {
   nomorDpa: string;
   kodeProgram: string;
   namaProgram: string;
+  kodeKegiatan?: string;
+  namaKegiatan?: string;
   kodeSubKegiatan: string;
   namaSubKegiatan: string;
   bidangPengampu: string; // SDA, BM, CK, PL, Tata Ruang, Sekretariat
@@ -175,6 +345,7 @@ export interface Requirement {
   id: string;
   label: string;
   description: string;
+  required?: boolean;
 }
 
 export const defaultRequirements: Requirement[] = [

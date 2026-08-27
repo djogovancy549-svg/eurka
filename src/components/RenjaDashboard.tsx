@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   RenjaProgram, 
+  RenjaKegiatan,
   RenjaSubKegiatan, 
   Proposal, 
   BIDANG_LIST,
@@ -17,6 +18,8 @@ import {
 import { getAllBidangConfigs } from '../services/configService';
 import { getProposalsByBidang } from '../services/proposalService';
 import { formatRupiah, printDokumenRenja } from '../utils';
+import { addNotification } from '../services/notificationService';
+import { logSecurityActivity } from '../services/securityService';
 import { 
   Building2, 
   Plus, 
@@ -37,7 +40,9 @@ import {
   TrendingUp,
   Coins,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  FolderTree,
+  ListTree
 } from 'lucide-react';
 
 interface RenjaDashboardProps {
@@ -47,25 +52,31 @@ interface RenjaDashboardProps {
 }
 
 export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: RenjaDashboardProps) {
-  const [renjaData, setRenjaData] = useState<RenjaMasterData>({ programs: [], subKegiatan: [] });
+  const [renjaData, setRenjaData] = useState<RenjaMasterData>({ programs: [], kegiatan: [], subKegiatan: [] });
   const [allProposals, setAllProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBidang, setSelectedBidang] = useState<string>('Semua');
   const [selectedSumberDana, setSelectedSumberDana] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedPrograms, setExpandedPrograms] = useState<Record<string, boolean>>({});
+  const [expandedKegiatans, setExpandedKegiatans] = useState<Record<string, boolean>>({});
 
   // Modals
   const [isAddProgramOpen, setIsAddProgramOpen] = useState(false);
+  const [isAddKegiatanOpen, setIsAddKegiatanOpen] = useState(false);
   const [isAddSubOpen, setIsAddSubOpen] = useState(false);
+  
+  const [selectedProgramForKegiatan, setSelectedProgramForKegiatan] = useState<string>('');
   const [selectedProgramForSub, setSelectedProgramForSub] = useState<string>('');
+  const [selectedKegiatanForSub, setSelectedKegiatanForSub] = useState<string>('');
+
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [targetSubKegiatan, setTargetSubKegiatan] = useState<RenjaSubKegiatan | null>(null);
   const [selectedUrkToLink, setSelectedUrkToLink] = useState<string>('');
   const [linkAlokasiBudget, setLinkAlokasiBudget] = useState<number>(0);
   const [linkCatatan, setLinkCatatan] = useState<string>('');
 
-  // New Program Form State
+  // Form State: Program
   const [newProgram, setNewProgram] = useState<Partial<RenjaProgram>>({
     kodeProgram: '1.03.',
     namaProgram: '',
@@ -76,9 +87,20 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     tahun: '2025'
   });
 
-  // New Sub-Kegiatan Form State
+  // Form State: Kegiatan
+  const [newKegiatan, setNewKegiatan] = useState<Partial<RenjaKegiatan>>({
+    kodeKegiatan: '1.03.01.',
+    namaKegiatan: '',
+    indikatorKegiatan: '',
+    targetKinerja: '',
+    paguKegiatan: 0,
+    bidangPengampu: 'SDA',
+    tahun: '2025'
+  });
+
+  // Form State: Sub-Kegiatan
   const [newSubKegiatan, setNewSubKegiatan] = useState<Partial<RenjaSubKegiatan>>({
-    kodeSubKegiatan: '1.03.',
+    kodeSubKegiatan: '1.03.01.2.01.',
     namaSubKegiatan: '',
     indikatorSubKegiatan: '',
     targetVolume: '',
@@ -100,10 +122,14 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
 
       setRenjaData(renjaRes);
 
-      // Expand all programs by default
-      const exp: Record<string, boolean> = {};
-      renjaRes.programs.forEach(p => { exp[p.id] = true; });
-      setExpandedPrograms(exp);
+      // Expand all by default
+      const expProg: Record<string, boolean> = {};
+      renjaRes.programs.forEach(p => { expProg[p.id] = true; });
+      setExpandedPrograms(expProg);
+
+      const expKeg: Record<string, boolean> = {};
+      (renjaRes.kegiatan || []).forEach(k => { expKeg[k.id] = true; });
+      setExpandedKegiatans(expKeg);
 
       // Load all proposals to map linked URK
       const allProps: Proposal[] = [];
@@ -131,6 +157,11 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     setExpandedPrograms(prev => ({ ...prev, [progId]: !prev[progId] }));
   };
 
+  const toggleKegiatan = (kegId: string) => {
+    setExpandedKegiatans(prev => ({ ...prev, [kegId]: !prev[kegId] }));
+  };
+
+  // PROGRAM CRUD
   const handleSaveProgram = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProgram.namaProgram || !newProgram.kodeProgram) return;
@@ -148,10 +179,19 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     };
 
     const updatedPrograms = [...renjaData.programs, created];
-    await saveRenjaMasterData(updatedPrograms, renjaData.subKegiatan);
+    await saveRenjaMasterData(updatedPrograms, renjaData.subKegiatan, renjaData.kegiatan || []);
     setRenjaData(prev => ({ ...prev, programs: updatedPrograms }));
     setExpandedPrograms(prev => ({ ...prev, [progId]: true }));
     setIsAddProgramOpen(false);
+
+    await logSecurityActivity(
+      'CREATE_RENJA_PROGRAM',
+      userEmail,
+      userName,
+      'renja',
+      `Menambahkan Program RENJA baru: ${created.kodeProgram} - ${created.namaProgram}`
+    );
+
     setNewProgram({
       kodeProgram: '1.03.',
       namaProgram: '',
@@ -163,6 +203,67 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     });
   };
 
+  const handleDeleteProgram = async (progId: string) => {
+    if (!window.confirm('Yakin ingin menghapus Program ini beserta seluruh Kegiatan dan Sub-Kegiatannya?')) return;
+    const updatedPrograms = renjaData.programs.filter(p => p.id !== progId);
+    const updatedKegiatan = (renjaData.kegiatan || []).filter(k => k.programId !== progId);
+    const updatedSub = renjaData.subKegiatan.filter(s => s.programId !== progId);
+    await saveRenjaMasterData(updatedPrograms, updatedSub, updatedKegiatan);
+    setRenjaData({ programs: updatedPrograms, kegiatan: updatedKegiatan, subKegiatan: updatedSub });
+  };
+
+  // KEGIATAN CRUD
+  const handleSaveKegiatan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKegiatan.namaKegiatan || !newKegiatan.kodeKegiatan || !selectedProgramForKegiatan) return;
+
+    const kegId = 'keg_' + Date.now();
+    const created: RenjaKegiatan = {
+      id: kegId,
+      programId: selectedProgramForKegiatan,
+      kodeKegiatan: newKegiatan.kodeKegiatan,
+      namaKegiatan: newKegiatan.namaKegiatan,
+      indikatorKegiatan: newKegiatan.indikatorKegiatan || '',
+      targetKinerja: newKegiatan.targetKinerja || '',
+      paguKegiatan: Number(newKegiatan.paguKegiatan) || 0,
+      bidangPengampu: newKegiatan.bidangPengampu || 'SDA',
+      tahun: newKegiatan.tahun || '2025'
+    };
+
+    const updatedKegiatans = [...(renjaData.kegiatan || []), created];
+    await saveRenjaMasterData(renjaData.programs, renjaData.subKegiatan, updatedKegiatans);
+    setRenjaData(prev => ({ ...prev, kegiatan: updatedKegiatans }));
+    setExpandedKegiatans(prev => ({ ...prev, [kegId]: true }));
+    setIsAddKegiatanOpen(false);
+
+    await logSecurityActivity(
+      'CREATE_RENJA_KEGIATAN',
+      userEmail,
+      userName,
+      'renja',
+      `Menambahkan Kegiatan RENJA baru: ${created.kodeKegiatan} - ${created.namaKegiatan}`
+    );
+
+    setNewKegiatan({
+      kodeKegiatan: '1.03.01.',
+      namaKegiatan: '',
+      indikatorKegiatan: '',
+      targetKinerja: '',
+      paguKegiatan: 0,
+      bidangPengampu: 'SDA',
+      tahun: '2025'
+    });
+  };
+
+  const handleDeleteKegiatan = async (kegId: string) => {
+    if (!window.confirm('Yakin ingin menghapus Kegiatan ini beserta seluruh Sub-Kegiatannya?')) return;
+    const updatedKegiatan = (renjaData.kegiatan || []).filter(k => k.id !== kegId);
+    const updatedSub = renjaData.subKegiatan.filter(s => s.kegiatanId !== kegId);
+    await saveRenjaMasterData(renjaData.programs, updatedSub, updatedKegiatan);
+    setRenjaData(prev => ({ ...prev, kegiatan: updatedKegiatan, subKegiatan: updatedSub }));
+  };
+
+  // SUB-KEGIATAN CRUD
   const handleSaveSubKegiatan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubKegiatan.namaSubKegiatan || !newSubKegiatan.kodeSubKegiatan || !selectedProgramForSub) return;
@@ -171,6 +272,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     const created: RenjaSubKegiatan = {
       id: subId,
       programId: selectedProgramForSub,
+      kegiatanId: selectedKegiatanForSub || undefined,
       kodeSubKegiatan: newSubKegiatan.kodeSubKegiatan,
       namaSubKegiatan: newSubKegiatan.namaSubKegiatan,
       indikatorSubKegiatan: newSubKegiatan.indikatorSubKegiatan || '',
@@ -185,11 +287,20 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     };
 
     const updatedSub = [...renjaData.subKegiatan, created];
-    await saveRenjaMasterData(renjaData.programs, updatedSub);
+    await saveRenjaMasterData(renjaData.programs, updatedSub, renjaData.kegiatan || []);
     setRenjaData(prev => ({ ...prev, subKegiatan: updatedSub }));
     setIsAddSubOpen(false);
+
+    await logSecurityActivity(
+      'CREATE_RENJA_SUB_KEGIATAN',
+      userEmail,
+      userName,
+      'renja',
+      `Menambahkan Sub-Kegiatan RENJA baru: ${created.kodeSubKegiatan} - ${created.namaSubKegiatan}`
+    );
+
     setNewSubKegiatan({
-      kodeSubKegiatan: '1.03.',
+      kodeSubKegiatan: '1.03.01.2.01.',
       namaSubKegiatan: '',
       indikatorSubKegiatan: '',
       targetVolume: '',
@@ -202,21 +313,14 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     });
   };
 
-  const handleDeleteProgram = async (progId: string) => {
-    if (!window.confirm('Yakin ingin menghapus Program ini beserta seluruh Sub-Kegiatannya?')) return;
-    const updatedPrograms = renjaData.programs.filter(p => p.id !== progId);
-    const updatedSub = renjaData.subKegiatan.filter(s => s.programId !== progId);
-    await saveRenjaMasterData(updatedPrograms, updatedSub);
-    setRenjaData({ programs: updatedPrograms, subKegiatan: updatedSub });
-  };
-
   const handleDeleteSubKegiatan = async (subId: string) => {
     if (!window.confirm('Yakin ingin menghapus Sub-Kegiatan ini?')) return;
     const updatedSub = renjaData.subKegiatan.filter(s => s.id !== subId);
-    await saveRenjaMasterData(renjaData.programs, updatedSub);
+    await saveRenjaMasterData(renjaData.programs, updatedSub, renjaData.kegiatan || []);
     setRenjaData(prev => ({ ...prev, subKegiatan: updatedSub }));
   };
 
+  // LINKING
   const openLinkModal = (sub: RenjaSubKegiatan) => {
     setTargetSubKegiatan(sub);
     setSelectedUrkToLink('');
@@ -242,6 +346,14 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     setRenjaData(updatedRenja);
     setAllProposals(prev => prev.map(p => p.id === updatedProposal.id ? updatedProposal : p));
     setIsLinkModalOpen(false);
+
+    await addNotification({
+      title: 'Usulan e-URK Diakomodir ke RENJA',
+      message: `Usulan "${prop.projectName}" telah berhasil ditautkan ke sub-kegiatan ${targetSubKegiatan.namaSubKegiatan} dengan alokasi ${formatRupiah(linkAlokasiBudget || prop.estimatedBudget)}.`,
+      type: 'renja_linked',
+      targetRole: 'all',
+      linkUrl: '#renja'
+    });
   };
 
   const handleUnlink = async (propId: string) => {
@@ -255,24 +367,25 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan seluruh data Program & Sub-Kegiatan RENJA? Tindakan ini akan menghapus data dummy dan memulai dengan lembar kerja kosong (0 pagu).')) return;
+    if (!window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan seluruh data Program, Kegiatan & Sub-Kegiatan RENJA? Tindakan ini akan menghapus data dummy dan memulai dengan lembar kerja kosong.')) return;
     
     await clearAllRenjaData();
-    setRenjaData({ programs: [], subKegiatan: [] });
-    // Reset linkage status on proposals
+    setRenjaData({ programs: [], kegiatan: [], subKegiatan: [] });
     setAllProposals(prev => prev.map(p => ({
       ...p,
       isAkomodirRenja: false,
       renjaSubKegiatanId: undefined,
       renjaSubKegiatanName: undefined,
+      renjaKegiatanId: undefined,
+      renjaKegiatanName: undefined,
       renjaProgramId: undefined,
       renjaProgramName: undefined,
       renjaPaguAlokasi: undefined
     })));
   };
 
-  // Calculations & Statistics: Pemisahan Sumber Dana & Pagu Indikatif
-  const sumberDanaStats: Record<string, { totalPagu: number; count: number; urkCount: number; urkBudget: number }> = React.useMemo(() => {
+  // Calculations
+  const sumberDanaStats = React.useMemo(() => {
     const map: Record<string, { totalPagu: number; count: number; urkCount: number; urkBudget: number }> = {};
     renjaData.subKegiatan.forEach(sub => {
       const sd = sub.sumberDana || 'DAU';
@@ -311,25 +424,23 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     .filter(p => p.isAkomodirRenja)
     .reduce((acc, p) => acc + (p.renjaPaguAlokasi || p.estimatedBudget || 0), 0);
 
-  // Available unlinked proposals for modal
   const availableProposals = allProposals.filter(p => !p.isAkomodirRenja);
 
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-2xl p-6 shadow-xl border border-slate-800 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold uppercase tracking-wider border border-blue-400/30">
-              <Building2 className="w-3.5 h-3.5" /> Modul Dokumen Resmi OPD
+              <FolderTree className="w-3.5 h-3.5" /> Hierarki: Program ➔ Kegiatan ➔ Sub-Kegiatan
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight">
               Rencana Kerja Perangkat Daerah (RENJA)
             </h1>
-            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-              Manajemen Program, Kegiatan, dan Sub-Kegiatan Dinas PUPR Kabupaten Nagekeo. 
-              Menampung alokasi program kerja dinas serta mengakomodasi usulan masyarakat (e-URK).
+            <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
+              Manajemen Program, Kegiatan, dan Sub-Kegiatan Dinas PUPR Kabupaten Nagekeo. Menampung alokasi program kerja dinas serta mengakomodasi usulan masyarakat (e-URK).
             </p>
           </div>
 
@@ -337,7 +448,7 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
             {renjaData.programs.length > 0 && (
               <button
                 onClick={() => printDokumenRenja(renjaData.programs, renjaData.subKegiatan, allProposals, '2025')}
-                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border border-white/20 shadow-sm"
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-semibold text-xs transition-all border border-white/20 shadow-sm"
               >
                 <Printer className="w-4 h-4" /> Cetak Dokumen RENJA
               </button>
@@ -347,15 +458,15 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
                 {renjaData.programs.length > 0 && (
                   <button
                     onClick={handleClearAll}
-                    title="Hapus semua program/subkegiatan dummy"
+                    title="Hapus semua program/kegiatan/subkegiatan dummy"
                     className="inline-flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all border border-red-400/30"
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> Kosongkan Data RENJA
+                    <Trash2 className="w-3.5 h-3.5" /> Kosongkan Data
                   </button>
                 )}
                 <button
                   onClick={() => setIsAddProgramOpen(true)}
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/30"
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/30"
                 >
                   <Plus className="w-4 h-4" /> Tambah Program Baru
                 </button>
@@ -365,147 +476,83 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
         </div>
       </div>
 
-      {/* KPI & Summary Metric Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Pagu RENJA OPD</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Coins className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-xl font-extrabold text-slate-900 mt-2">
+          <div className="text-xl font-black text-slate-900 mt-2">
             {formatRupiah(totalPaguRenja)}
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            {renjaData.programs.length} Program &bull; {renjaData.subKegiatan.length} Sub-Kegiatan
+            {renjaData.programs.length} Prog &bull; {(renjaData.kegiatan || []).length} Keg &bull; {renjaData.subKegiatan.length} Sub-Keg
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Usulan URK Terakomodir</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Usulan Terakomodir</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <LinkIcon className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-xl font-extrabold text-emerald-600 mt-2">
+          <div className="text-xl font-black text-emerald-600 mt-2">
             {totalUrkLinked} Usulan
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Aspirasi Musrenbang & Pokir yang masuk Renja
+            Aspirasi Musrenbang & Pokir masuk RENJA
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Anggaran URK Terserap</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Pagu e-URK Terakomodir</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-xl font-extrabold text-indigo-600 mt-2">
+          <div className="text-xl font-black text-indigo-600 mt-2">
             {formatRupiah(totalUrkBudgetLinked)}
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            {totalPaguRenja > 0 ? `${((totalUrkBudgetLinked / totalPaguRenja) * 100).toFixed(1)}% dari Total Renja` : '0%'}
+            {totalPaguRenja > 0 ? `${((totalUrkBudgetLinked / totalPaguRenja) * 100).toFixed(1)}% dari Total RENJA` : '0%'}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Kesiapan SIPD</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nomenklatur SIPD</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-xl font-extrabold text-purple-600 mt-2">
+          <div className="text-xl font-black text-purple-600 mt-2">
             Kepmendagri 050
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Nomenklatur standar perencanaan daerah
+            Standar Program-Kegiatan-SubKegiatan RI
           </div>
         </div>
       </div>
 
-      {/* REKAPITULASI & PEMISAHAN PAGU BERDASARKAN SUMBER DANA */}
-      {renjaData.subKegiatan.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm border-l-4 border-l-emerald-500 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Coins className="w-5 h-5 text-emerald-600" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Pemisahan Pagu Indikatif RENJA Berdasarkan Sumber Dana
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Rincian alokasi anggaran sub-kegiatan dan usulan masyarakat (URK) terakomodasi per pos pendanaan.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-semibold">Total Alokasi:</span>
-              <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
-                {formatRupiah(totalPaguRenja)}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
-            {Object.entries(sumberDanaStats).map(([sdName, stats]) => {
-              const percentage = totalPaguRenja > 0 ? (stats.totalPagu / totalPaguRenja) * 100 : 0;
-              const isSelected = selectedSumberDana === sdName;
-              return (
-                <div
-                  key={sdName}
-                  onClick={() => setSelectedSumberDana(isSelected ? 'Semua' : sdName)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
-                      : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-slate-800 truncate">{sdName}</span>
-                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                      {percentage.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-slate-900 mt-1">
-                    {formatRupiah(stats.totalPagu)}
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200/60 font-medium">
-                    <span>{stats.count} Sub-Kegiatan</span>
-                    <span className="text-emerald-700 font-bold">{stats.urkCount} Usulan URK</span>
-                  </div>
-                  {/* Visual Progress Bar */}
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, percentage)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* Filter & Search Bar */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-            <span className="text-xs font-bold uppercase text-slate-500 mr-1 flex items-center gap-1 shrink-0">
+            <span className="text-xs font-bold uppercase text-slate-500 mr-1 flex items-center gap-1">
               <Filter className="w-3.5 h-3.5" /> Bidang:
             </span>
             {['Semua', 'SDA', 'BM', 'CK', 'PL', 'Tata Ruang', 'Sekretariat'].map(b => (
               <button
                 key={b}
                 onClick={() => setSelectedBidang(b)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   selectedBidang === b
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -521,21 +568,13 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
             <select
               value={selectedSumberDana}
               onChange={(e) => setSelectedSumberDana(e.target.value)}
-              className="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="Semua">Semua Sumber Dana</option>
               {Object.keys(sumberDanaStats).map(sd => (
                 <option key={sd} value={sd}>{sd}</option>
               ))}
             </select>
-            {selectedSumberDana !== 'Semua' && (
-              <button
-                onClick={() => setSelectedSumberDana('Semua')}
-                className="text-[10px] font-bold text-red-600 hover:underline px-1"
-              >
-                Reset
-              </button>
-            )}
           </div>
         </div>
 
@@ -543,118 +582,109 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Cari Program / Sub-Kegiatan..."
+            placeholder="Cari Program / Kegiatan / Sub-Kegiatan..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      {/* Program and Sub-Kegiatan List */}
+      {/* Program ➔ Kegiatan ➔ Sub-Kegiatan Hierarchical Tree */}
       {loading ? (
-        <div className="bg-white rounded-xl p-12 text-center text-slate-500 border border-slate-200">
+        <div className="bg-white rounded-2xl p-12 text-center text-slate-500 border border-slate-200">
           <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
           <p className="font-semibold text-sm">Memuat Data RENJA OPD...</p>
         </div>
       ) : filteredPrograms.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center text-slate-500 border border-slate-200 shadow-sm max-w-2xl mx-auto my-6">
+        <div className="bg-white rounded-3xl p-12 text-center text-slate-500 border border-slate-200 shadow-xs max-w-2xl mx-auto my-6">
           <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100">
             <Building2 className="w-8 h-8" />
           </div>
-          {renjaData.programs.length === 0 ? (
-            <>
-              <h3 className="font-extrabold text-lg text-slate-900">Lembar Kerja RENJA OPD Masih Kosong</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-                Data dummy telah dibersihkan. Anda sekarang dapat mulai menginput Program dan Sub-Kegiatan resmi sesuai DPA/Renja Dinas PUPR Kabupaten Nagekeo.
-              </p>
-              {isAdmin && (
-                <button
-                  onClick={() => setIsAddProgramOpen(true)}
-                  className="mt-5 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all"
-                >
-                  <Plus className="w-4 h-4" /> Mulai Tambah Program Baru
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              <h3 className="font-bold text-slate-900">Tidak ada Program yang cocok dengan filter</h3>
-              <p className="text-xs text-slate-400 mt-1">Coba ganti filter bidang atau reset pencarian kata kunci.</p>
-            </>
+          <h3 className="font-extrabold text-lg text-slate-900">Belum ada Program RENJA</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+            Mulai susun struktur Program, Kegiatan, dan Sub-Kegiatan Dinas PUPR Nagekeo.
+          </p>
+          {isAdmin && (
+            <button
+              onClick={() => setIsAddProgramOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all"
+            >
+              <Plus className="w-4 h-4" /> Mulai Tambah Program Baru
+            </button>
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {filteredPrograms.map(program => {
             const allProgSubs = renjaData.subKegiatan.filter(s => s.programId === program.id);
-            const subs = allProgSubs.filter(s => selectedSumberDana === 'Semua' || (s.sumberDana || 'DAU') === selectedSumberDana);
+            const progKegiatans = (renjaData.kegiatan || []).filter(k => k.programId === program.id);
             const totalProgSubPagu = allProgSubs.reduce((a, b) => a + (b.paguSubKegiatan || 0), 0);
-            const isExpanded = !!expandedPrograms[program.id];
+            const isProgExpanded = !!expandedPrograms[program.id];
 
             return (
-              <div key={program.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all">
-                {/* Program Header Accordion */}
+              <div key={program.id} className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all">
+                {/* LEVEL 1: PROGRAM HEADER */}
                 <div 
-                  className="p-4 bg-slate-50/80 hover:bg-slate-100/80 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 transition-colors"
+                  className="p-5 bg-slate-900 text-white hover:bg-slate-950 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors"
                   onClick={() => toggleProgram(program.id)}
                 >
                   <div className="flex items-start gap-3 flex-1">
-                    <button className="mt-1 text-slate-400 hover:text-slate-600">
-                      {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5" />}
+                    <button className="mt-1 text-slate-400 hover:text-white">
+                      {isProgExpanded ? <ChevronDown className="w-5 h-5 text-blue-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
                     </button>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono text-xs font-bold">
-                          {program.kodeProgram}
+                        <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30 font-mono text-xs font-bold">
+                          PROGRAM: {program.kodeProgram}
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-xs font-bold">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 text-xs font-bold">
                           Bidang {program.bidangPengampu}
                         </span>
                         <span className="text-xs text-slate-400 font-medium">TA {program.tahun}</span>
                       </div>
-                      <h2 className="text-base font-bold text-slate-900 mt-1">
+                      <h2 className="text-base sm:text-lg font-black text-white mt-1.5">
                         {program.namaProgram}
                       </h2>
-                      <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <div className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                         <span>Indikator: <strong>{program.indikatorKinerja || '-'}</strong></span>
-                        <span>Target: <strong className="text-blue-700">{program.targetKinerja || '-'}</strong></span>
+                        <span>Target: <strong className="text-blue-300">{program.targetKinerja || '-'}</strong></span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 self-end md:self-center" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-4 shrink-0 self-end md:self-center" onClick={e => e.stopPropagation()}>
                     <div className="text-right">
-                      <div className="text-xs font-semibold text-slate-500 uppercase">Pagu Program</div>
-                      <div className="text-sm font-extrabold text-blue-900">
+                      <div className="text-[11px] font-semibold text-slate-400 uppercase">Pagu Total Program</div>
+                      <div className="text-base font-black text-emerald-400">
                         {formatRupiah(totalProgSubPagu || program.paguProgram)}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium">
-                        {subs.length} Sub-Kegiatan
+                      <div className="text-[10px] text-slate-400 font-medium">
+                        {progKegiatans.length} Kegiatan &bull; {allProgSubs.length} Sub-Kegiatan
                       </div>
                     </div>
 
                     {isAdmin && (
-                      <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                      <div className="flex items-center gap-1.5 pl-3 border-l border-slate-700">
                         <button
                           onClick={() => {
-                            setSelectedProgramForSub(program.id);
-                            setNewSubKegiatan(prev => ({
+                            setSelectedProgramForKegiatan(program.id);
+                            setNewKegiatan(prev => ({
                               ...prev,
-                              kodeSubKegiatan: program.kodeProgram + '.2.01.',
+                              kodeKegiatan: program.kodeProgram + '01.',
                               bidangPengampu: program.bidangPengampu
                             }));
-                            setIsAddSubOpen(true);
+                            setIsAddKegiatanOpen(true);
                           }}
-                          title="Tambah Sub-Kegiatan"
-                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          title="Tambah Kegiatan di Bawah Program Ini"
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5" /> + Kegiatan
                         </button>
                         <button
                           onClick={() => handleDeleteProgram(program.id)}
-                          title="Hapus Program"
-                          className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          title="Hapus Seluruh Program"
+                          className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -663,133 +693,237 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
                   </div>
                 </div>
 
-                {/* Sub-Kegiatan Table */}
-                {isExpanded && (
-                  <div className="p-4 space-y-3">
-                    {subs.length === 0 ? (
-                      <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                        Belum ada Sub-Kegiatan dalam Program ini.{' '}
+                {/* LEVEL 2: KEGIATAN & SUB-KEGIATAN CONTAINER */}
+                {isProgExpanded && (
+                  <div className="p-4 sm:p-6 bg-slate-50/50 space-y-6">
+                    {/* List of Kegiatans under this Program */}
+                    {progKegiatans.length === 0 && allProgSubs.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400 text-xs italic bg-white rounded-2xl border border-dashed border-slate-200">
+                        Belum ada Kegiatan atau Sub-Kegiatan dalam Program ini.{' '}
                         {isAdmin && (
                           <button
                             onClick={() => {
-                              setSelectedProgramForSub(program.id);
-                              setIsAddSubOpen(true);
+                              setSelectedProgramForKegiatan(program.id);
+                              setIsAddKegiatanOpen(true);
                             }}
                             className="text-blue-600 font-bold hover:underline ml-1"
                           >
-                            + Tambah Sub-Kegiatan
+                            + Tambah Kegiatan Baru
                           </button>
                         )}
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-slate-100/75 text-slate-600 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
-                              <th className="p-3">Kode & Sub-Kegiatan</th>
-                              <th className="p-3">Kinerja & Target</th>
-                              <th className="p-3">Lokasi</th>
-                              <th className="p-3">Sumber Dana</th>
-                              <th className="p-3 text-right">Pagu Renja</th>
-                              <th className="p-3">Akomodasi Usulan URK</th>
-                              <th className="p-3 text-center">Aksi</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {subs.map(sub => {
-                              // Find all proposals linked to this sub-kegiatan
-                              const linked = allProposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
-                              const subLinkedBudget = linked.reduce((a, b) => a + (b.renjaPaguAlokasi || b.estimatedBudget || 0), 0);
+                      <>
+                        {/* Render each Kegiatan */}
+                        {progKegiatans.map(keg => {
+                          const kegSubs = allProgSubs.filter(s => s.kegiatanId === keg.id);
+                          const totalKegPagu = kegSubs.reduce((a, b) => a + (b.paguSubKegiatan || 0), 0);
+                          const isKegExpanded = expandedKegiatans[keg.id] !== false;
 
-                              return (
-                                <tr key={sub.id} className="hover:bg-blue-50/30 transition-colors">
-                                  <td className="p-3 align-top">
-                                    <div className="font-mono text-[11px] font-bold text-slate-600">{sub.kodeSubKegiatan}</div>
-                                    <div className="font-bold text-slate-900 text-sm mt-0.5">{sub.namaSubKegiatan}</div>
-                                    <div className="text-[10px] text-slate-500 mt-0.5">Bidang: {sub.bidangPengampu}</div>
-                                  </td>
-                                  <td className="p-3 align-top">
-                                    <div className="text-slate-700">{sub.indikatorSubKegiatan || '-'}</div>
-                                    <div className="font-bold text-blue-800 mt-1">
-                                      Vol: {sub.targetVolume || '-'} {sub.satuan || ''}
+                          return (
+                            <div key={keg.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                              {/* Kegiatan Header */}
+                              <div 
+                                className="p-4 bg-indigo-50/70 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-indigo-50 transition-colors"
+                                onClick={() => toggleKegiatan(keg.id)}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  <button className="mt-0.5 text-indigo-600">
+                                    {isKegExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                  </button>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 rounded bg-indigo-200 text-indigo-900 font-mono text-[11px] font-bold">
+                                        KEGIATAN: {keg.kodeKegiatan}
+                                      </span>
+                                      <span className="text-[11px] text-slate-500 font-medium">{keg.indikatorKegiatan || ''}</span>
                                     </div>
-                                  </td>
-                                  <td className="p-3 align-top text-slate-700">
-                                    {sub.lokasi || 'Nagekeo'}
-                                  </td>
-                                  <td className="p-3 align-top">
-                                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                                      {sub.sumberDana || 'DAU'}
-                                    </span>
-                                  </td>
-                                  <td className="p-3 align-top text-right">
-                                    <div className="font-extrabold text-slate-900 text-sm">
-                                      {formatRupiah(sub.paguSubKegiatan)}
+                                    <h3 className="text-sm font-extrabold text-slate-900 mt-1">
+                                      {keg.namaKegiatan}
+                                    </h3>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0" onClick={e => e.stopPropagation()}>
+                                  <div className="text-right">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase">Pagu Kegiatan</div>
+                                    <div className="text-xs font-black text-indigo-900">
+                                      {formatRupiah(totalKegPagu || keg.paguKegiatan)}
                                     </div>
-                                    {linked.length > 0 && (
-                                      <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                                        URK: {formatRupiah(subLinkedBudget)}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 align-top">
-                                    {linked.length === 0 ? (
-                                      <div className="flex items-center gap-1.5 text-slate-400 text-[11px] italic">
-                                        <span>Renja Murni Dinas</span>
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-1.5 max-w-xs">
-                                        {linked.map(p => (
-                                          <div key={p.id} className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 flex items-start justify-between gap-1">
-                                            <div>
-                                              <div className="font-bold truncate max-w-[180px]">{p.projectName}</div>
-                                              <div className="text-[9px] text-emerald-700">
-                                                {p.sumberUsulan || 'URK'} &bull; {p.desa ? `${p.desa}, ` : ''}{p.kecamatan || ''}
-                                              </div>
-                                              <div className="font-semibold text-[10px] text-emerald-900 mt-0.5">
-                                                {formatRupiah(p.renjaPaguAlokasi || p.estimatedBudget || 0)}
-                                              </div>
-                                            </div>
-                                            {isAdmin && (
-                                              <button
-                                                onClick={() => handleUnlink(p.id)}
-                                                title="Lepaskan Usulan ini dari Renja"
-                                                className="text-emerald-700 hover:text-red-600 p-0.5"
-                                              >
-                                                <Unlink className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 align-top text-center">
-                                    <div className="flex items-center justify-center gap-1">
+                                  </div>
+
+                                  {isAdmin && (
+                                    <div className="flex items-center gap-1">
                                       <button
-                                        onClick={() => openLinkModal(sub)}
-                                        title="Hubungkan Usulan URK (Musrenbang / Pokir)"
-                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] inline-flex items-center gap-1 shadow-sm transition-all"
+                                        onClick={() => {
+                                          setSelectedProgramForSub(program.id);
+                                          setSelectedKegiatanForSub(keg.id);
+                                          setNewSubKegiatan(prev => ({
+                                            ...prev,
+                                            kodeSubKegiatan: keg.kodeKegiatan + '2.01.',
+                                            bidangPengampu: program.bidangPengampu
+                                          }));
+                                          setIsAddSubOpen(true);
+                                        }}
+                                        title="Tambah Sub-Kegiatan di Bawah Kegiatan Ini"
+                                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
                                       >
-                                        <LinkIcon className="w-3 h-3" /> + Tautkan URK
+                                        <Plus className="w-3 h-3" /> Sub-Kegiatan
                                       </button>
-                                      {isAdmin && (
-                                        <button
-                                          onClick={() => handleDeleteSubKegiatan(sub.id)}
-                                          title="Hapus Sub-Kegiatan"
-                                          className="p-1 text-slate-400 hover:text-red-600 rounded"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
+                                      <button
+                                        onClick={() => handleDeleteKegiatan(keg.id)}
+                                        title="Hapus Kegiatan"
+                                        className="p-1 text-slate-400 hover:text-red-600 rounded"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
                                     </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* LEVEL 3: SUB-KEGIATAN TABLE */}
+                              {isKegExpanded && (
+                                <div className="p-3 overflow-x-auto">
+                                  {kegSubs.length === 0 ? (
+                                    <div className="text-center py-4 text-slate-400 text-xs italic">
+                                      Belum ada sub-kegiatan di bawah kegiatan ini.
+                                    </div>
+                                  ) : (
+                                    <table className="w-full text-left text-xs border-collapse">
+                                      <thead>
+                                        <tr className="bg-slate-100/75 text-slate-600 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
+                                          <th className="p-2.5">Kode & Sub-Kegiatan</th>
+                                          <th className="p-2.5">Kinerja & Target</th>
+                                          <th className="p-2.5">Lokasi</th>
+                                          <th className="p-2.5">Sumber Dana</th>
+                                          <th className="p-2.5 text-right">Pagu Sub-Kegiatan</th>
+                                          <th className="p-2.5">Usulan e-URK Terakomodir</th>
+                                          <th className="p-2.5 text-center">Aksi</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {kegSubs.map(sub => {
+                                          const linked = allProposals.filter(p => p.isAkomodirRenja && p.renjaSubKegiatanId === sub.id);
+                                          const subLinkedBudget = linked.reduce((a, b) => a + (b.renjaPaguAlokasi || b.estimatedBudget || 0), 0);
+
+                                          return (
+                                            <tr key={sub.id} className="hover:bg-blue-50/30 transition-colors">
+                                              <td className="p-2.5 align-top">
+                                                <div className="font-mono text-[10px] font-bold text-slate-600">{sub.kodeSubKegiatan}</div>
+                                                <div className="font-bold text-slate-900 text-xs mt-0.5">{sub.namaSubKegiatan}</div>
+                                              </td>
+                                              <td className="p-2.5 align-top">
+                                                <div className="text-slate-700 text-[11px]">{sub.indikatorSubKegiatan || '-'}</div>
+                                                <div className="font-bold text-blue-800 text-[11px] mt-0.5">
+                                                  Vol: {sub.targetVolume || '-'} {sub.satuan || ''}
+                                                </div>
+                                              </td>
+                                              <td className="p-2.5 align-top text-slate-700 text-[11px]">
+                                                {sub.lokasi || 'Nagekeo'}
+                                              </td>
+                                              <td className="p-2.5 align-top">
+                                                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                                  {sub.sumberDana || 'DAU'}
+                                                </span>
+                                              </td>
+                                              <td className="p-2.5 align-top text-right">
+                                                <div className="font-extrabold text-slate-900 text-xs">
+                                                  {formatRupiah(sub.paguSubKegiatan)}
+                                                </div>
+                                                {linked.length > 0 && (
+                                                  <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                                                    URK: {formatRupiah(subLinkedBudget)}
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="p-2.5 align-top">
+                                                {linked.length === 0 ? (
+                                                  <span className="text-slate-400 text-[11px] italic">Renja Murni Dinas</span>
+                                                ) : (
+                                                  <div className="space-y-1 max-w-xs">
+                                                    {linked.map(p => (
+                                                      <div key={p.id} className="p-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-950 flex items-start justify-between gap-1">
+                                                        <div>
+                                                          <div className="font-bold truncate max-w-[150px]">{p.projectName}</div>
+                                                          <div className="font-semibold text-emerald-900">
+                                                            {formatRupiah(p.renjaPaguAlokasi || p.estimatedBudget || 0)}
+                                                          </div>
+                                                        </div>
+                                                        {isAdmin && (
+                                                          <button
+                                                            onClick={() => handleUnlink(p.id)}
+                                                            title="Lepaskan Usulan"
+                                                            className="text-emerald-700 hover:text-red-600 p-0.5"
+                                                          >
+                                                            <Unlink className="w-3 h-3" />
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="p-2.5 align-top text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <button
+                                                    onClick={() => openLinkModal(sub)}
+                                                    title="Tautkan Usulan URK"
+                                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] inline-flex items-center gap-1 shadow-xs"
+                                                  >
+                                                    <LinkIcon className="w-3 h-3" /> + Tautkan
+                                                  </button>
+                                                  {isAdmin && (
+                                                    <button
+                                                      onClick={() => handleDeleteSubKegiatan(sub.id)}
+                                                      title="Hapus Sub-Kegiatan"
+                                                      className="p-1 text-slate-400 hover:text-red-600 rounded"
+                                                    >
+                                                      <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Unassigned Sub-Kegiatans under this Program */}
+                        {allProgSubs.filter(s => !s.kegiatanId).length > 0 && (
+                          <div className="bg-white rounded-2xl border border-amber-200 p-4">
+                            <div className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
+                              <Info className="w-4 h-4 text-amber-600" /> Sub-Kegiatan Non-Spesifik Kegiatan:
+                            </div>
+                            <div className="space-y-2">
+                              {allProgSubs.filter(s => !s.kegiatanId).map(sub => (
+                                <div key={sub.id} className="p-2.5 bg-slate-50 rounded-xl border flex items-center justify-between text-xs">
+                                  <div>
+                                    <span className="font-mono font-bold text-slate-500">{sub.kodeSubKegiatan}</span>
+                                    <span className="font-bold text-slate-900 ml-2">{sub.namaSubKegiatan}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-extrabold text-slate-900">{formatRupiah(sub.paguSubKegiatan)}</span>
+                                    <button
+                                      onClick={() => openLinkModal(sub)}
+                                      className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold"
+                                    >
+                                      + Tautkan URK
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -799,103 +933,99 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
         </div>
       )}
 
-      {/* Modal: Tambah Program Baru */}
+      {/* MODAL 1: ADD PROGRAM */}
       {isAddProgramOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-600" /> Tambah Program RENJA Baru
-              </h2>
-              <button onClick={() => setIsAddProgramOpen(false)} className="text-slate-400 hover:text-slate-600">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-extrabold text-slate-900">Tambah Program RENJA Baru</h3>
+              <button onClick={() => setIsAddProgramOpen(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <form onSubmit={handleSaveProgram} className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Kode Program (Nomenklatur)</label>
-                  <input
-                    type="text"
-                    required
-                    value={newProgram.kodeProgram}
-                    onChange={e => setNewProgram({ ...newProgram, kodeProgram: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: 1.03.02"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Bidang Pengampu</label>
-                  <select
-                    value={newProgram.bidangPengampu}
-                    onChange={e => setNewProgram({ ...newProgram, bidangPengampu: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {['SDA', 'BM', 'CK', 'PL', 'Tata Ruang', 'Sekretariat'].map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Kode Program (SIPD)</label>
+                <input
+                  type="text"
+                  required
+                  value={newProgram.kodeProgram}
+                  onChange={(e) => setNewProgram(prev => ({ ...prev, kodeProgram: e.target.value }))}
+                  placeholder="Contoh: 1.03.01"
+                  className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nama Program RENJA</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nama Nomenklatur Program</label>
                 <input
                   type="text"
                   required
                   value={newProgram.namaProgram}
-                  onChange={e => setNewProgram({ ...newProgram, namaProgram: e.target.value })}
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Contoh: Program Pengelolaan Sumber Daya Air (SDA)"
+                  onChange={(e) => setNewProgram(prev => ({ ...prev, namaProgram: e.target.value }))}
+                  placeholder="Contoh: PROGRAM PENYELENGGARAAN JALAN"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 uppercase"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Indikator Kinerja Program</label>
-                  <input
-                    type="text"
-                    value={newProgram.indikatorKinerja}
-                    onChange={e => setNewProgram({ ...newProgram, indikatorKinerja: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: Persentase Saluran Irigasi Baik"
-                  />
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Bidang Pengampu</label>
+                  <select
+                    value={newProgram.bidangPengampu}
+                    onChange={(e) => setNewProgram(prev => ({ ...prev, bidangPengampu: e.target.value }))}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {BIDANG_LIST.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Kinerja</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Tahun Anggaran</label>
                   <input
                     type="text"
-                    value={newProgram.targetKinerja}
-                    onChange={e => setNewProgram({ ...newProgram, targetKinerja: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: 85 %"
+                    value={newProgram.tahun}
+                    onChange={(e) => setNewProgram(prev => ({ ...prev, tahun: e.target.value }))}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Estimasi Pagu Program (Rp)</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Indikator Kinerja Program</label>
                 <input
-                  type="number"
-                  value={newProgram.paguProgram}
-                  onChange={e => setNewProgram({ ...newProgram, paguProgram: Number(e.target.value) })}
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="0"
+                  type="text"
+                  value={newProgram.indikatorKinerja}
+                  onChange={(e) => setNewProgram(prev => ({ ...prev, indikatorKinerja: e.target.value }))}
+                  placeholder="Contoh: Persentase jalan kondisi mantap"
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Target Kinerja</label>
+                <input
+                  type="text"
+                  value={newProgram.targetKinerja}
+                  onChange={(e) => setNewProgram(prev => ({ ...prev, targetKinerja: e.target.value }))}
+                  placeholder="Contoh: 85 %"
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddProgramOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm"
+                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm"
                 >
                   Simpan Program
                 </button>
@@ -905,116 +1035,177 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
         </div>
       )}
 
-      {/* Modal: Tambah Sub-Kegiatan Baru */}
-      {isAddSubOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-blue-600" /> Tambah Sub-Kegiatan RENJA
-              </h2>
-              <button onClick={() => setIsAddSubOpen(false)} className="text-slate-400 hover:text-slate-600">
+      {/* MODAL 2: ADD KEGIATAN */}
+      {isAddKegiatanOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-extrabold text-slate-900">Tambah Kegiatan RENJA Baru</h3>
+              <button onClick={() => setIsAddKegiatanOpen(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <form onSubmit={handleSaveSubKegiatan} className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Kode Sub-Kegiatan</label>
-                  <input
-                    type="text"
-                    required
-                    value={newSubKegiatan.kodeSubKegiatan}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, kodeSubKegiatan: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: 1.03.02.2.01.01"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Sumber Dana</label>
-                  <select
-                    value={newSubKegiatan.sumberDana}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, sumberDana: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
-                  >
-                    {SUMBER_DANA_LIST.map(sd => (
-                      <option key={sd} value={sd.split(' ')[0]}>{sd}</option>
-                    ))}
-                    <option value="Lainnya">Sumber Dana Lainnya</option>
-                  </select>
-                </div>
-              </div>
-
+            <form onSubmit={handleSaveKegiatan} className="space-y-4 mt-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nama Sub-Kegiatan</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Kode Kegiatan (SIPD)</label>
                 <input
                   type="text"
                   required
-                  value={newSubKegiatan.namaSubKegiatan}
-                  onChange={e => setNewSubKegiatan({ ...newSubKegiatan, namaSubKegiatan: e.target.value })}
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Contoh: Pembangunan Jaringan Irigasi Permukaan"
+                  value={newKegiatan.kodeKegiatan}
+                  onChange={(e) => setNewKegiatan(prev => ({ ...prev, kodeKegiatan: e.target.value }))}
+                  placeholder="Contoh: 1.03.01.2.01"
+                  className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Indikator Keluaran</label>
-                  <input
-                    type="text"
-                    value={newSubKegiatan.indikatorSubKegiatan}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, indikatorSubKegiatan: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: Panjang Irigasi Dibangun"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Volume & Satuan</label>
-                  <input
-                    type="text"
-                    value={newSubKegiatan.targetVolume}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, targetVolume: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: 5.2 Km"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nama Kegiatan</label>
+                <input
+                  type="text"
+                  required
+                  value={newKegiatan.namaKegiatan}
+                  onChange={(e) => setNewKegiatan(prev => ({ ...prev, namaKegiatan: e.target.value }))}
+                  placeholder="Contoh: Penyelenggaraan Jalan Kabupaten/Kota"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Lokasi Target</label>
-                  <input
-                    type="text"
-                    value={newSubKegiatan.lokasi}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, lokasi: e.target.value })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: Wilayah Boawae & Aesesa"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Pagu Sub-Kegiatan (Rp)</label>
-                  <input
-                    type="number"
-                    value={newSubKegiatan.paguSubKegiatan}
-                    onChange={e => setNewSubKegiatan({ ...newSubKegiatan, paguSubKegiatan: Number(e.target.value) })}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="0"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Indikator Kegiatan</label>
+                <input
+                  type="text"
+                  value={newKegiatan.indikatorKegiatan}
+                  onChange={(e) => setNewKegiatan(prev => ({ ...prev, indikatorKegiatan: e.target.value }))}
+                  placeholder="Contoh: Panjang jalan kabupaten yang ditingkatkan/dipelihara"
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsAddSubOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                  onClick={() => setIsAddKegiatanOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm"
+                  className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
+                >
+                  Simpan Kegiatan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: ADD SUB-KEGIATAN */}
+      {isAddSubOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-extrabold text-slate-900">Tambah Sub-Kegiatan RENJA Baru</h3>
+              <button onClick={() => setIsAddSubOpen(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveSubKegiatan} className="space-y-4 mt-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Kode Sub-Kegiatan (SIPD)</label>
+                <input
+                  type="text"
+                  required
+                  value={newSubKegiatan.kodeSubKegiatan}
+                  onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, kodeSubKegiatan: e.target.value }))}
+                  placeholder="Contoh: 1.03.01.2.01.0001"
+                  className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nama Sub-Kegiatan</label>
+                <input
+                  type="text"
+                  required
+                  value={newSubKegiatan.namaSubKegiatan}
+                  onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, namaSubKegiatan: e.target.value }))}
+                  placeholder="Contoh: Rekonstruksi / Peningkatan Kapasitas Struktur Jalan"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Target Volume</label>
+                  <input
+                    type="text"
+                    value={newSubKegiatan.targetVolume}
+                    onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, targetVolume: e.target.value }))}
+                    placeholder="Contoh: 12.5"
+                    className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Satuan</label>
+                  <input
+                    type="text"
+                    value={newSubKegiatan.satuan}
+                    onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, satuan: e.target.value }))}
+                    placeholder="Contoh: Km / Paket / Unit"
+                    className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Sumber Dana</label>
+                  <select
+                    value={newSubKegiatan.sumberDana}
+                    onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, sumberDana: e.target.value }))}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {SUMBER_DANA_LIST.map(sd => (
+                      <option key={sd} value={sd}>{sd}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Pagu Sub-Kegiatan (Rp)</label>
+                  <input
+                    type="number"
+                    value={newSubKegiatan.paguSubKegiatan || ''}
+                    onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, paguSubKegiatan: parseFloat(e.target.value) || 0 }))}
+                    placeholder="Contoh: 750000000"
+                    className="w-full text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Lokasi Kegiatan</label>
+                <input
+                  type="text"
+                  value={newSubKegiatan.lokasi}
+                  onChange={(e) => setNewSubKegiatan(prev => ({ ...prev, lokasi: e.target.value }))}
+                  placeholder="Contoh: Kabupaten Nagekeo"
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm"
                 >
                   Simpan Sub-Kegiatan
                 </button>
@@ -1024,103 +1215,87 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
         </div>
       )}
 
-      {/* Modal: Hubungkan / Tautkan Usulan URK ke Sub-Kegiatan */}
+      {/* MODAL 4: LINK USULAN URK TO SUB-KEGIATAN */}
       {isLinkModalOpen && targetSubKegiatan && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <LinkIcon className="w-5 h-5 text-emerald-600" /> Akomodasi Usulan URK ke RENJA
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Sub-Kegiatan Target: <strong>{targetSubKegiatan.namaSubKegiatan}</strong> ({targetSubKegiatan.kodeSubKegiatan})
-                </p>
+                <h3 className="text-base font-extrabold text-slate-900">Akomodasi Usulan Masyarakat (e-URK)</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Tautkan aspirasi ke Sub-Kegiatan RENJA</p>
               </div>
-              <button onClick={() => setIsLinkModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsLinkModalOpen(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            <div className="mt-4 p-3 bg-blue-50/80 rounded-2xl border border-blue-200/70 text-xs">
+              <span className="font-bold text-blue-900 block mb-0.5">Target Sub-Kegiatan:</span>
+              <div className="font-extrabold text-slate-900">{targetSubKegiatan.namaSubKegiatan}</div>
+              <div className="text-[11px] text-blue-800 font-mono mt-0.5">
+                Kode: {targetSubKegiatan.kodeSubKegiatan} &bull; Pagu: {formatRupiah(targetSubKegiatan.paguSubKegiatan)}
+              </div>
+            </div>
+
             <div className="space-y-4 mt-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Pilih Usulan Aspirasi (e-URK: Musrenbang / Pokir DPRD)
-                </label>
-                {availableProposals.length === 0 ? (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
-                    Semua usulan URK saat ini sudah tertaut ke Sub-Kegiatan RENJA atau belum ada usulan yang tersedia.
-                  </div>
-                ) : (
-                  <select
-                    value={selectedUrkToLink}
-                    onChange={e => {
-                      const id = e.target.value;
-                      setSelectedUrkToLink(id);
-                      const prop = availableProposals.find(p => p.id === id);
-                      if (prop) {
-                        setLinkAlokasiBudget(prop.estimatedBudget || 0);
-                      }
-                    }}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 font-medium"
-                  >
-                    <option value="">-- Pilih Usulan URK untuk Diakomodir --</option>
-                    {availableProposals.map(prop => (
-                      <option key={prop.id} value={prop.id}>
-                        [{prop.sumberUsulan || 'URK'}] {prop.projectName} - {prop.desa || prop.kecamatan || ''} ({formatRupiah(prop.estimatedBudget)})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <label className="text-xs font-bold text-slate-700 block mb-1">Pilih Usulan e-URK Tersedia:</label>
+                <select
+                  value={selectedUrkToLink}
+                  onChange={(e) => {
+                    setSelectedUrkToLink(e.target.value);
+                    const prop = allProposals.find(p => p.id === e.target.value);
+                    if (prop) setLinkAlokasiBudget(prop.estimatedBudget);
+                  }}
+                  className="w-full text-xs font-medium bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Pilih Usulan Masuk --</option>
+                  {availableProposals.map(p => (
+                    <option key={p.id} value={p.id}>
+                      [{p.sumberUsulan || 'URK'}] {p.projectName} ({formatRupiah(p.estimatedBudget)}) - {p.kecamatan}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {selectedUrkToLink && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Pagu Anggaran yang Dialokasikan dalam RENJA (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      value={linkAlokasiBudget}
-                      onChange={e => setLinkAlokasiBudget(Number(e.target.value))}
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold"
-                    />
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Anda dapat menyesuaikan alokasi anggaran sesuai pagu realistis dinas.
-                    </p>
-                  </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Alokasi Anggaran Terakomodir (Rp):</label>
+                <input
+                  type="number"
+                  value={linkAlokasiBudget || ''}
+                  onChange={(e) => setLinkAlokasiBudget(parseFloat(e.target.value) || 0)}
+                  className="w-full text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-xs font-semibold text-emerald-600 mt-1 block">
+                  {formatRupiah(linkAlokasiBudget)}
+                </span>
+              </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Catatan Akomodasi / Penyelarasan
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={linkCatatan}
-                      onChange={e => setLinkCatatan(e.target.value)}
-                      placeholder="Contoh: Diakomodasi pada paket DAK Fisik penanganan jalan prioritas 2025"
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Catatan / Keterangan Penyesuaian:</label>
+                <textarea
+                  value={linkCatatan}
+                  onChange={(e) => setLinkCatatan(e.target.value)}
+                  placeholder="Contoh: Diakomodir penuh sesuai pagu indikatif Renja 2025"
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 h-20"
+                />
+              </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsLinkModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Batal
                 </button>
                 <button
                   type="button"
-                  disabled={!selectedUrkToLink}
                   onClick={handleExecuteLink}
-                  className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
+                  disabled={!selectedUrkToLink}
+                  className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm disabled:opacity-50"
                 >
-                  <CheckCircle className="w-4 h-4" /> Akomodir ke Sub-Kegiatan RENJA
+                  Tautkan ke RENJA
                 </button>
               </div>
             </div>
