@@ -1434,4 +1434,238 @@ export const printRincianSppd = (sppd: any) => {
   }
 };
 
+/**
+ * Cetak Dokumen Rekapitulasi & Berita Acara Skala Prioritas Usulan PUPR Nagekeo
+ */
+export const printRekapitulasiPrioritas = (
+  proposals: any[],
+  tahun: string = '2025',
+  paguTersedia: number = 0
+) => {
+  const sorted = [...proposals].sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+  const totalBudget = sorted.reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+  
+  const countP1 = sorted.filter(p => p.priorityLevel === 'P1').length;
+  const budgetP1 = sorted.filter(p => p.priorityLevel === 'P1').reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+  const countP2 = sorted.filter(p => p.priorityLevel === 'P2').length;
+  const budgetP2 = sorted.filter(p => p.priorityLevel === 'P2').reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+  const countP3 = sorted.filter(p => p.priorityLevel === 'P3').length;
+  const budgetP3 = sorted.filter(p => p.priorityLevel === 'P3').reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+  const countP4 = sorted.filter(p => p.priorityLevel === 'P4' || !p.priorityLevel).length;
+  const budgetP4 = sorted.filter(p => p.priorityLevel === 'P4' || !p.priorityLevel).reduce((acc, p) => acc + (p.estimatedBudget || 0), 0);
+
+  const dateStr = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Rekapitulasi Skala Prioritas Usulan e-URK - DPUPR Nagekeo</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: 'Arial', sans-serif; font-size: 8pt; color: #0f172a; line-height: 1.3; }
+        .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+        .header h1 { font-size: 13pt; margin: 0; text-transform: uppercase; font-weight: bold; }
+        .header h2 { font-size: 11pt; margin: 3px 0; text-transform: uppercase; }
+        .header p { font-size: 8.5pt; margin: 0; color: #475569; }
+        
+        .summary-grid { display: flex; gap: 8px; margin-bottom: 12px; }
+        .summary-card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; background: #f8fafc; }
+        .summary-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; color: #64748b; }
+        .summary-val { font-size: 10pt; font-weight: bold; margin-top: 2px; }
+        .p1 { border-left: 4px solid #ef4444; }
+        .p2 { border-left: 4px solid #f59e0b; }
+        .p3 { border-left: 4px solid #3b82f6; }
+        .p4 { border-left: 4px solid #64748b; }
+
+        .table-data { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 7.5pt; }
+        .table-data th, .table-data td { border: 1px solid #94a3b8; padding: 4px 6px; vertical-align: top; }
+        .table-data th { background: #f1f5f9; font-weight: bold; text-align: center; text-transform: uppercase; }
+        .number { text-align: right; font-family: 'Courier New', monospace; font-weight: bold; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 7pt; }
+        .badge-p1 { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .badge-p2 { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .badge-p3 { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        .badge-p4 { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+
+        .signatures { display: flex; justify-content: space-between; margin-top: 20px; page-break-inside: avoid; }
+        .sig-block { width: 40%; text-align: center; font-size: 8pt; }
+        .sig-space { height: 50px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>PEMERINTAH KABUPATEN NAGEKEO</h1>
+        <h2>DINAS PEKERJAAN UMUM DAN PENATAAN RUANG</h2>
+        <p>REKAPITULASI & PENETAPAN SKALA PRIORITAS USULAN (e-URK KE DALAM RENJA & DPA ${tahun})</p>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card p1">
+          <div class="summary-title">Prioritas 1 (Utama / Mendesak)</div>
+          <div class="summary-val text-red-600">${countP1} Usulan &bull; ${formatRupiah(budgetP1)}</div>
+        </div>
+        <div class="summary-card p2">
+          <div class="summary-title">Prioritas 2 (Tinggi)</div>
+          <div class="summary-val text-amber-600">${countP2} Usulan &bull; ${formatRupiah(budgetP2)}</div>
+        </div>
+        <div class="summary-card p3">
+          <div class="summary-title">Prioritas 3 (Sedang)</div>
+          <div class="summary-val text-blue-600">${countP3} Usulan &bull; ${formatRupiah(budgetP3)}</div>
+        </div>
+        <div class="summary-card p4">
+          <div class="summary-title">Prioritas 4 (Cadangan)</div>
+          <div class="summary-val text-slate-600">${countP4} Usulan &bull; ${formatRupiah(budgetP4)}</div>
+        </div>
+      </div>
+
+      <table class="table-data">
+        <thead>
+          <tr>
+            <th style="width: 25px;">Rank</th>
+            <th style="width: 70px;">Skala Prioritas</th>
+            <th style="width: 45px;">Skor</th>
+            <th>Program / Nama Pekerjaan Fisik</th>
+            <th style="width: 140px;">Lokasi (Desa/Kecamatan)</th>
+            <th style="width: 90px;">Sumber Usulan</th>
+            <th style="width: 100px;">Kebutuhan Anggaran</th>
+            <th style="width: 130px;">Rekomendasi Pelaksanaan</th>
+            <th style="width: 150px;">Justifikasi Teknis</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map((p, idx) => {
+            const pLevel = p.priorityLevel || 'P4';
+            const badgeClass = pLevel === 'P1' ? 'badge-p1' : pLevel === 'P2' ? 'badge-p2' : pLevel === 'P3' ? 'badge-p3' : 'badge-p4';
+            const phase = pLevel === 'P1' ? 'Tahap 1 (Mendesak/Utama)' : pLevel === 'P2' ? 'Tahap 2 (Prioritas Standar)' : pLevel === 'P3' ? 'Tahap 3 (Jadwal Reguler)' : 'Tahap 4 (Cadangan/Perubahan)';
+            
+            return `
+              <tr>
+                <td style="text-align: center; font-weight: bold;">#${idx + 1}</td>
+                <td style="text-align: center;"><span class="badge ${badgeClass}">${pLevel}</span></td>
+                <td style="text-align: center; font-weight: bold; font-family: monospace;">${p.priorityScore || '-'}</td>
+                <td>
+                  <strong>${p.projectName || '-'}</strong>
+                  <div style="color: #64748b; font-size: 7pt;">${p.programName || p.activityName || ''}</div>
+                </td>
+                <td>${p.desa ? `Desa ${p.desa}, ` : ''}${p.kecamatan ? `Kec. ${p.kecamatan}` : p.location || '-'}</td>
+                <td>${p.sumberUsulan || '-'}</td>
+                <td class="number">${formatRupiah(p.estimatedBudget || 0)}</td>
+                <td style="font-weight: 600;">${phase}</td>
+                <td>${p.priorityCriteria?.justifikasiTeknis || p.justification || '-'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background: #f8fafc; font-weight: bold;">
+            <td colspan="6" style="text-align: right;">TOTAL KEBUTUHAN ANGGARAN (${sorted.length} USULAN) :</td>
+            <td class="number" style="background: #dcfce7; color: #15803d;">${formatRupiah(totalBudget)}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <p>Mengetahui,<br>Kepala Dinas PUPR Kabupaten Nagekeo</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+        <div class="sig-block">
+          <p>Mbay, ${dateStr}<br>Tim Verifikator Perencanaan & Evaluasi (URK)</p>
+          <div class="sig-space"></div>
+          <p style="font-weight: bold; text-decoration: underline;">( ................................................ )</p>
+          <p>NIP. ........................................</p>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=800');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
+};
+
+/**
+ * Ekspor Rekapitulasi Skala Prioritas ke CSV
+ */
+export const exportCsvPrioritas = (proposals: any[], tahun: string = '2025') => {
+  const sorted = [...proposals].sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+  
+  const headers = [
+    'Ranking',
+    'Skala Prioritas',
+    'Total Skor',
+    'Urgensi (30%)',
+    'Kesiapan Dokumen (25%)',
+    'Dampak Manfaat (25%)',
+    'Keselarasan RPJMD (20%)',
+    'Nama Usulan',
+    'Program / Sub Kegiatan',
+    'Kecamatan',
+    'Desa / Kelurahan',
+    'Sumber Aspirasi',
+    'Kebutuhan Anggaran (Rp)',
+    'Rekomendasi Pelaksanaan',
+    'Justifikasi Teknis',
+    'Penilai',
+    'Tanggal Penilaian'
+  ];
+
+  const rows = sorted.map((p, idx) => {
+    const pLevel = p.priorityLevel || 'P4';
+    const c = p.priorityCriteria;
+    const phase = pLevel === 'P1' ? 'Tahap 1 (Mendesak/Utama)' : pLevel === 'P2' ? 'Tahap 2 (Prioritas Standar)' : pLevel === 'P3' ? 'Tahap 3 (Jadwal Reguler)' : 'Tahap 4 (Cadangan/Perubahan)';
+    
+    return [
+      `#${idx + 1}`,
+      pLevel,
+      p.priorityScore || 0,
+      c?.urgensiKondisi || 0,
+      c?.kesiapanDokumen || 0,
+      c?.dampakManfaat || 0,
+      c?.keselarasanRpjmd || 0,
+      `"${(p.projectName || '').replace(/"/g, '""')}"`,
+      `"${(p.programName || p.activityName || '').replace(/"/g, '""')}"`,
+      `"${(p.kecamatan || '').replace(/"/g, '""')}"`,
+      `"${(p.desa || '').replace(/"/g, '""')}"`,
+      `"${(p.sumberUsulan || '').replace(/"/g, '""')}"`,
+      p.estimatedBudget || 0,
+      `"${phase}"`,
+      `"${(c?.justifikasiTeknis || p.justification || '').replace(/"/g, '""')}"`,
+      `"${(c?.evaluatedBy || '').replace(/"/g, '""')}"`,
+      `"${(c?.evaluatedAt || '').replace(/"/g, '""')}"`
+    ];
+  });
+
+  const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [
+    headers.join(','),
+    ...rows.map(e => e.join(','))
+  ].join('\n');
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `Rekapitulasi_Skala_Prioritas_URK_PUPR_${tahun}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+
 

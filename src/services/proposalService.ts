@@ -1,8 +1,9 @@
-import { Proposal, SipdStatus } from '../types';
+import { Proposal, SipdStatus, PriorityLevel, PriorityCriteria } from '../types';
 import { getAccessToken } from '../auth';
 import { getRows } from '../sheetsApi';
 import { parseMoney } from '../utils';
 import { getRenjaMasterData } from './renjaService';
+import { getAllPriorityEvaluations } from './priorityService';
 
 /**
  * Fetch proposals for a specific Bidang/Unit given its sheetId
@@ -14,11 +15,14 @@ export async function getProposalsByBidang(bidangId: string, sheetId?: string): 
     const token = await getAccessToken();
     if (!token) return [];
 
-    const rows = await getRows(token, sheetId, 'Proposals!A2:X');
+    const [rows, priorityMap, renjaData] = await Promise.all([
+      getRows(token, sheetId, 'Proposals!A2:Y'),
+      getAllPriorityEvaluations(),
+      getRenjaMasterData()
+    ]);
+
     if (!rows || !Array.isArray(rows)) return [];
 
-    // Also get renja master data to populate linkage if stored
-    const renjaData = await getRenjaMasterData();
     const renjaSubKegiatanMap = new Map(renjaData.subKegiatan.map(s => [s.id, s]));
     const renjaProgMap = new Map(renjaData.programs.map(p => [p.id, p]));
 
@@ -39,6 +43,24 @@ export async function getProposalsByBidang(bidangId: string, sheetId?: string): 
       // Check if this proposal is linked in any renja sub-kegiatan
       const linkedSub = renjaData.subKegiatan.find(s => s.linkedProposalIds && s.linkedProposalIds.includes(proposalId));
       const linkedProg = linkedSub ? renjaProgMap.get(linkedSub.programId) : undefined;
+
+      // Priority evaluation from Col Y or Firestore cache
+      let priorityData = priorityMap[proposalId];
+      if (!priorityData && r[24]) {
+        try {
+          const parsedColY = JSON.parse(r[24]);
+          if (parsedColY.level) {
+            priorityData = {
+              priorityLevel: parsedColY.level as PriorityLevel,
+              totalScore: parsedColY.score || 0,
+              urgensiKondisi: parsedColY.criteria?.u || 3,
+              kesiapanDokumen: parsedColY.criteria?.k || 3,
+              dampakManfaat: parsedColY.criteria?.d || 3,
+              keselarasanRpjmd: parsedColY.criteria?.r || 3
+            };
+          }
+        } catch (e) {}
+      }
 
       return {
         id: proposalId,
@@ -71,7 +93,11 @@ export async function getProposalsByBidang(bidangId: string, sheetId?: string): 
         renjaSubKegiatanId: linkedSub?.id,
         renjaSubKegiatanName: linkedSub?.namaSubKegiatan,
         renjaProgramName: linkedProg?.namaProgram,
-        renjaPaguAlokasi: linkedSub?.paguSubKegiatan
+        renjaPaguAlokasi: linkedSub?.paguSubKegiatan,
+        // Priority Scale
+        priorityLevel: priorityData?.priorityLevel,
+        priorityScore: priorityData?.totalScore,
+        priorityCriteria: priorityData
       } as Proposal;
     });
 

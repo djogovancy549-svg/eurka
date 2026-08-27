@@ -85,6 +85,118 @@ export interface Proposal {
   renjaSubKegiatanName?: string;
   renjaPaguAlokasi?: number;
   catatanAkomodasiRenja?: string;
+  // Penentuan Skala Prioritas Pelaksanaan
+  priorityLevel?: PriorityLevel;
+  priorityScore?: number; // Nilai 0 - 100
+  priorityCriteria?: PriorityCriteria;
+}
+
+// ==========================================
+// SKALA PRIORITAS & INDIKATOR PELAKSANAAN
+// ==========================================
+export type PriorityLevel = 'P1' | 'P2' | 'P3' | 'P4';
+
+export interface PriorityLevelMeta {
+  code: PriorityLevel;
+  label: string;
+  shortLabel: string;
+  description: string;
+  minScore: number;
+  colorClass: string;
+  badgeClass: string;
+  ringClass: string;
+  executionPhase: string;
+}
+
+export const PRIORITY_LEVELS: Record<PriorityLevel, PriorityLevelMeta> = {
+  P1: {
+    code: 'P1',
+    label: 'Prioritas 1 (Sangat Mendesak / Utama)',
+    shortLabel: 'P1 - Utama',
+    description: 'Wajib dilaksanakan paling awal pada APBD Murni. Kondisi kritis, dokumen lengkap, dampak luas.',
+    minScore: 80,
+    colorClass: 'text-red-600 bg-red-50 border-red-200',
+    badgeClass: 'bg-red-100 text-red-800 border-red-300',
+    ringClass: 'ring-red-500',
+    executionPhase: 'Tahap 1 (Mendesak / Utama)'
+  },
+  P2: {
+    code: 'P2',
+    label: 'Prioritas 2 (Prioritas Tinggi)',
+    shortLabel: 'P2 - Tinggi',
+    description: 'Sangat direkomendasikan masuk DPA Induk. Kesiapan teknis baik, mendukung sentra ekonomi.',
+    minScore: 65,
+    colorClass: 'text-amber-600 bg-amber-50 border-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
+    ringClass: 'ring-amber-500',
+    executionPhase: 'Tahap 2 (Prioritas Standar)'
+  },
+  P3: {
+    code: 'P3',
+    label: 'Prioritas 3 (Prioritas Sedang)',
+    shortLabel: 'P3 - Sedang',
+    description: 'Kategori penanganan reguler/pemeliharaan berkala atau menunggu kelengkapan DED.',
+    minScore: 50,
+    colorClass: 'text-blue-600 bg-blue-50 border-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
+    ringClass: 'ring-blue-500',
+    executionPhase: 'Tahap 3 (Jadwal Reguler)'
+  },
+  P4: {
+    code: 'P4',
+    label: 'Prioritas 4 (Cadangan / Ditunda)',
+    shortLabel: 'P4 - Cadangan',
+    description: 'Usulan cadangan (backlog) atau dialokasikan pada Perubahan APBD / tahun berikutnya.',
+    minScore: 0,
+    colorClass: 'text-slate-600 bg-slate-50 border-slate-200',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
+    ringClass: 'ring-slate-400',
+    executionPhase: 'Tahap 4 (Cadangan / Perubahan)'
+  }
+};
+
+export interface PriorityCriteria {
+  urgensiKondisi: number; // 1-5 (Bobot 30%): Tingkat Kerusakan/Bahaya Fisik
+  kesiapanDokumen: number; // 1-5 (Bobot 25%): Kesiapan Lahan Bebas Sengketa & DED/RAB
+  dampakManfaat: number; // 1-5 (Bobot 25%): Jumlah Jiwa/Penerima Manfaat & Konektivitas
+  keselarasanRpjmd: number; // 1-5 (Bobot 20%): Sinergi RPJMD/Stunting/Kemiskinan Ekstrem
+  totalScore: number; // 0 - 100
+  priorityLevel: PriorityLevel;
+  justifikasiTeknis?: string;
+  evaluatedBy?: string;
+  evaluatedAt?: string;
+}
+
+export function computePriorityScore(
+  urgensi: number,
+  kesiapan: number,
+  dampak: number,
+  rpjmd: number
+): { totalScore: number; level: PriorityLevel } {
+  // Bobot:
+  // Urgensi: 30% -> (nilai/5)*30
+  // Kesiapan: 25% -> (nilai/5)*25
+  // Dampak: 25% -> (nilai/5)*25
+  // RPJMD: 20% -> (nilai/5)*20
+  const u = Math.min(5, Math.max(1, urgensi || 1));
+  const k = Math.min(5, Math.max(1, kesiapan || 1));
+  const d = Math.min(5, Math.max(1, dampak || 1));
+  const r = Math.min(5, Math.max(1, rpjmd || 1));
+
+  const score = Math.round(
+    (u / 5) * 30 +
+    (k / 5) * 25 +
+    (d / 5) * 25 +
+    (r / 5) * 20
+  );
+
+  let level: PriorityLevel = 'P4';
+  if (score >= 80) level = 'P1';
+  else if (score >= 65) level = 'P2';
+  else if (score >= 50) level = 'P3';
+  else level = 'P4';
+
+  return { totalScore: score, level };
 }
 
 export interface RenjaProgram {
@@ -127,6 +239,8 @@ export interface RenjaSubKegiatan {
   bidangPengampu: string;
   tahun: string;
   linkedProposalIds?: string[]; // List of URK Proposal IDs linked/absorbed
+  priorityLevel?: PriorityLevel;
+  priorityScore?: number;
 }
 
 export const DEFAULT_RENJA_PROGRAMS: RenjaProgram[] = [];
@@ -305,6 +419,8 @@ export interface DpaItem {
   realisasiFisik: number; // Persentase realisasi fisik (0 - 100%)
   targetKinerja?: string;
   keterangan?: string;
+  priorityLevel?: PriorityLevel;
+  priorityScore?: number;
   updatedAt: string;
 }
 

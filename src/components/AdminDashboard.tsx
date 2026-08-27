@@ -5,11 +5,13 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { getRows, updateCell } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
-import { Proposal, BidangConfig, BudgetRule, Requirement, NON_BIDANG_UNITS, defaultNonBidangRequirements, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
+import { Proposal, BidangConfig, BudgetRule, Requirement, NON_BIDANG_UNITS, defaultNonBidangRequirements, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus, PriorityLevel, PriorityCriteria, PRIORITY_LEVELS } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, deleteBidangConfig, getNagekeoWilayah } from '../services/configService';
-import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
+import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD, printRekapitulasiPrioritas, exportCsvPrioritas } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
-import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Plus, Trash2, ShieldCheck, Tag, Users, Layers, X, CheckSquare } from 'lucide-react';
+import { getAllPriorityEvaluations } from '../services/priorityService';
+import PriorityScoringModal from './PriorityScoringModal';
+import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Plus, Trash2, ShieldCheck, Tag, Users, Layers, X, CheckSquare, Award, Sliders } from 'lucide-react';
 
 interface AdminDashboardProps {
   userEmail: string;
@@ -67,6 +69,10 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
   const [filterDesa, setFilterDesa] = useState('ALL');
   const [filterSumber, setFilterSumber] = useState('ALL');
   const [filterSipd, setFilterSipd] = useState('ALL');
+  const [filterPriority, setFilterPriority] = useState('ALL');
+
+  // Priority Scoring Modal State
+  const [scoringProposal, setScoringProposal] = useState<Proposal | null>(null);
 
   const openExternalLink = (rawUrl?: string) => {
     if (!rawUrl) {
@@ -323,7 +329,11 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       const token = await getAccessToken();
       if (!token) return;
       
-      const rows = await getRows(token, sheetId, 'Proposals!A2:X');
+      const [rows, priorityMap] = await Promise.all([
+        getRows(token, sheetId, 'Proposals!A2:Y'),
+        getAllPriorityEvaluations()
+      ]);
+
       const formatted = rows.map((r: any[], index: number) => {
         let reqs = {};
         try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
@@ -335,9 +345,27 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
             pokirArr = r[20].startsWith('[') ? JSON.parse(r[20]) : r[20].split(',').map((s: string) => s.trim());
           }
         } catch (e) {}
+
+        const proposalId = r[0] || `prop-${index}`;
+        let priorityData = priorityMap[proposalId];
+        if (!priorityData && r[24]) {
+          try {
+            const parsedColY = JSON.parse(r[24]);
+            if (parsedColY.level) {
+              priorityData = {
+                priorityLevel: parsedColY.level as PriorityLevel,
+                totalScore: parsedColY.score || 0,
+                urgensiKondisi: parsedColY.criteria?.u || 3,
+                kesiapanDokumen: parsedColY.criteria?.k || 3,
+                dampakManfaat: parsedColY.criteria?.d || 3,
+                keselarasanRpjmd: parsedColY.criteria?.r || 3
+              };
+            }
+          } catch (e) {}
+        }
         
         return {
-          id: r[0],
+          id: proposalId,
           rowIndex: index + 2,
           submittedAt: r[1],
           tahunUsulan: r[2],
@@ -361,7 +389,11 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
           pengusulPokir: pokirArr,
           sipdStatus: (r[21] as SipdStatus) || 'draft',
           sipdRegistrationNo: r[22] || '',
-          sipdNotes: r[23] || ''
+          sipdNotes: r[23] || '',
+          // Priority Scale
+          priorityLevel: priorityData?.priorityLevel,
+          priorityScore: priorityData?.totalScore,
+          priorityCriteria: priorityData
         } as Proposal;
       });
       
@@ -380,6 +412,13 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
     if (filterDesa !== 'ALL' && p.desa !== filterDesa) return false;
     if (filterSumber !== 'ALL' && p.sumberUsulan !== filterSumber) return false;
     if (filterSipd !== 'ALL' && (p.sipdStatus || 'draft') !== filterSipd) return false;
+    if (filterPriority !== 'ALL') {
+      if (filterPriority === 'unscored') {
+        if (p.priorityScore !== undefined && p.priorityScore !== null) return false;
+      } else if (p.priorityLevel !== filterPriority) {
+        return false;
+      }
+    }
     if (filterSearch.trim()) {
       const q = filterSearch.toLowerCase();
       const matchProject = (p.projectName || '').toLowerCase().includes(q);
@@ -591,6 +630,22 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
               <option value="ditolak_sipd">Ditolak / Tidak Layak</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Skala Prioritas</label>
+            <select
+              value={filterPriority}
+              onChange={e => setFilterPriority(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none text-blue-800 bg-blue-50/50"
+            >
+              <option value="ALL">Semua Prioritas</option>
+              <option value="P1">Prioritas 1 (Utama)</option>
+              <option value="P2">Prioritas 2 (Tinggi)</option>
+              <option value="P3">Prioritas 3 (Sedang)</option>
+              <option value="P4">Prioritas 4 (Cadangan)</option>
+              <option value="unscored">Belum Dinilai</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -623,6 +678,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                   <th className="py-3 px-4">Sumber & Wilayah</th>
                   <th className="py-3 px-4">Pengusul / Pokir</th>
                   <th className="py-3 px-4">Estimasi Anggaran</th>
+                  <th className="py-3 px-4 text-center">Skala Prioritas</th>
                   <th className="py-3 px-4">Evaluasi Teknis</th>
                   <th className="py-3 px-4">Status Pra-SIPD</th>
                   <th className="py-3 px-4 text-center">Aksi Verifikasi</th>
@@ -669,6 +725,29 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
                       {formatRupiah(p.estimatedBudget)}
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      {p.priorityLevel ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${PRIORITY_LEVELS[p.priorityLevel].badgeClass}`}>
+                            {p.priorityLevel} ({p.priorityScore} Pts)
+                          </span>
+                          <button
+                            onClick={() => setScoringProposal(p)}
+                            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline"
+                          >
+                            Ubah Nilai
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setScoringProposal(p)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] border border-indigo-200 transition-colors"
+                        >
+                          <Award className="w-3 h-3 text-indigo-600" />
+                          Beri Nilai
+                        </button>
+                      )}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <select
@@ -870,6 +949,67 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                 <div className="mt-1">{renderSipdBadge(selectedProposalDetail.sipdStatus, selectedProposalDetail.sipdRegistrationNo)}</div>
               </div>
 
+              {/* SKALA PRIORITAS & INDIKATOR PELAKSANAAN */}
+              <div className="col-span-2 bg-gradient-to-r from-slate-50 to-blue-50 border border-blue-200 p-3.5 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-blue-600" />
+                    Penentuan Skala Prioritas & Indikator Pelaksanaan:
+                  </p>
+                  {selectedProposalDetail.priorityLevel ? (
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${PRIORITY_LEVELS[selectedProposalDetail.priorityLevel].badgeClass}`}>
+                      {PRIORITY_LEVELS[selectedProposalDetail.priorityLevel].label} ({selectedProposalDetail.priorityScore} Pts)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                      Belum Dinilai
+                    </span>
+                  )}
+                </div>
+
+                {selectedProposalDetail.priorityCriteria ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-white p-2 rounded-lg border border-red-100">
+                        <span className="text-[10px] text-slate-500 font-bold block">Urgensi (30%)</span>
+                        <strong className="text-red-700">{selectedProposalDetail.priorityCriteria.urgensiKondisi} / 5</strong>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-100">
+                        <span className="text-[10px] text-slate-500 font-bold block">Kesiapan (25%)</span>
+                        <strong className="text-emerald-700">{selectedProposalDetail.priorityCriteria.kesiapanDokumen} / 5</strong>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-blue-100">
+                        <span className="text-[10px] text-slate-500 font-bold block">Dampak (25%)</span>
+                        <strong className="text-blue-700">{selectedProposalDetail.priorityCriteria.dampakManfaat} / 5</strong>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-purple-100">
+                        <span className="text-[10px] text-slate-500 font-bold block">RPJMD (20%)</span>
+                        <strong className="text-purple-700">{selectedProposalDetail.priorityCriteria.keselarasanRpjmd} / 5</strong>
+                      </div>
+                    </div>
+                    {selectedProposalDetail.priorityCriteria.justifikasiTeknis && (
+                      <p className="text-xs text-slate-600 italic bg-white p-2 rounded-lg border border-slate-200">
+                        Justifikasi Teknis: "{selectedProposalDetail.priorityCriteria.justifikasiTeknis}"
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const prop = selectedProposalDetail;
+                      setSelectedProposalDetail(null);
+                      setScoringProposal(prop);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    {selectedProposalDetail.priorityLevel ? 'Ubah Penilaian Skala Prioritas' : 'Beri Penilaian Skala Prioritas'}
+                  </button>
+                </div>
+              </div>
+
               {/* KETERKAITAN RENJA OPD */}
               <div className="col-span-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-3 rounded-xl">
                 <div className="flex items-center justify-between">
@@ -927,6 +1067,30 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
             </div>
           </div>
         </div>
+      )}
+
+      {/* PRIORITY SCORING MODAL */}
+      {scoringProposal && (
+        <PriorityScoringModal
+          isOpen={!!scoringProposal}
+          onClose={() => setScoringProposal(null)}
+          proposal={scoringProposal}
+          userEmail={userEmail}
+          userName={userName}
+          onPrioritySaved={(proposalId, criteria) => {
+            setProposals(prev => prev.map(p => {
+              if (p.id === proposalId) {
+                return {
+                  ...p,
+                  priorityLevel: criteria.priorityLevel,
+                  priorityScore: criteria.totalScore,
+                  priorityCriteria: criteria
+                };
+              }
+              return p;
+            }));
+          }}
+        />
       )}
     </div>
   );
