@@ -456,8 +456,16 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
   // Filtered proposals
   const filteredProposals = proposals.filter(p => {
-    if (filterKecamatan !== 'ALL' && p.kecamatan !== filterKecamatan) return false;
-    if (filterDesa !== 'ALL' && p.desa !== filterDesa) return false;
+    if (filterKecamatan !== 'ALL') {
+      const pKec = (p.kecamatan || '').toLowerCase();
+      const fKec = filterKecamatan.toLowerCase();
+      if (!pKec.includes(fKec)) return false;
+    }
+    if (filterDesa !== 'ALL') {
+      const pDesa = (p.desa || '').toLowerCase();
+      const fDesa = filterDesa.toLowerCase();
+      if (!pDesa.includes(fDesa)) return false;
+    }
     if (filterSumber !== 'ALL' && p.sumberUsulan !== filterSumber) return false;
     if (filterSipd !== 'ALL' && (p.sipdStatus || 'draft') !== filterSipd) return false;
     if (filterPriority !== 'ALL') {

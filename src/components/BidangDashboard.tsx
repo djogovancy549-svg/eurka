@@ -72,6 +72,53 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [pokirList, setPokirList] = useState<string[]>([]);
   const [newPokirInput, setNewPokirInput] = useState('');
 
+  // Multi-Kecamatan & Multi-Desa State
+  const [selectedKecList, setSelectedKecList] = useState<string[]>([]);
+  const [selectedDesaList, setSelectedDesaList] = useState<string[]>([]);
+  const [customDesaInput, setCustomDesaInput] = useState('');
+
+  const toggleKecamatan = (kecName: string) => {
+    let nextKec: string[];
+    if (selectedKecList.includes(kecName)) {
+      nextKec = selectedKecList.filter(k => k !== kecName);
+    } else {
+      nextKec = [...selectedKecList, kecName];
+    }
+    setSelectedKecList(nextKec);
+    setFormData(prev => ({ ...prev, kecamatan: nextKec.join(', ') }));
+
+    if (nextKec.length > 0) {
+      const validDesasForSelectedKec = wilayahList
+        .filter(w => nextKec.includes(w.kecamatan))
+        .flatMap(w => w.desaList);
+      const filteredDesas = selectedDesaList.filter(d => validDesasForSelectedKec.includes(d));
+      setSelectedDesaList(filteredDesas);
+      setFormData(prev => ({ ...prev, desa: filteredDesas.join(', ') }));
+    }
+  };
+
+  const toggleDesa = (desaName: string) => {
+    let nextDesa: string[];
+    if (selectedDesaList.includes(desaName)) {
+      nextDesa = selectedDesaList.filter(d => d !== desaName);
+    } else {
+      nextDesa = [...selectedDesaList, desaName];
+    }
+    setSelectedDesaList(nextDesa);
+    setFormData(prev => ({ ...prev, desa: nextDesa.join(', ') }));
+  };
+
+  const handleAddCustomDesa = () => {
+    if (!customDesaInput.trim()) return;
+    const name = customDesaInput.trim();
+    if (!selectedDesaList.includes(name)) {
+      const nextDesa = [...selectedDesaList, name];
+      setSelectedDesaList(nextDesa);
+      setFormData(prev => ({ ...prev, desa: nextDesa.join(', ') }));
+    }
+    setCustomDesaInput('');
+  };
+
   const [attachments, setAttachments] = useState<{ name: string; url: string; size?: string; type?: string; uploadedAt?: string }[]>([]);
 
   const handleAddPokir = () => {
@@ -187,10 +234,14 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
           handleBidangSelect(configsData[0].id);
         }
         if (wData.length > 0) {
+          const firstKec = wData[0].kecamatan;
+          const firstDesa = wData[0].desaList[0] || '';
+          setSelectedKecList(prev => prev.length === 0 ? [firstKec] : prev);
+          setSelectedDesaList(prev => prev.length === 0 ? [firstDesa] : prev);
           setFormData(prev => ({
             ...prev,
-            kecamatan: prev.kecamatan || wData[0].kecamatan,
-            desa: prev.desa || (wData[0].desaList[0] || '')
+            kecamatan: prev.kecamatan || firstKec,
+            desa: prev.desa || firstDesa
           }));
         }
       } catch (err) {
@@ -429,6 +480,9 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         zoomLink: '',
         reqs: {}
       }));
+      setSelectedKecList(wilayahList.length > 0 ? [wilayahList[0].kecamatan] : []);
+      setSelectedDesaList(wilayahList.length > 0 ? [wilayahList[0].desaList[0] || ''] : []);
+      setCustomDesaInput('');
       setPokirList([]);
       setAttachments([]);
       fetchProposals(configToUse.sheetId);
@@ -451,8 +505,16 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
 
   // Filtered proposals
   const filteredProposals = proposals.filter(p => {
-    if (filterKecamatan !== 'ALL' && p.kecamatan !== filterKecamatan) return false;
-    if (filterDesa !== 'ALL' && p.desa !== filterDesa) return false;
+    if (filterKecamatan !== 'ALL') {
+      const pKec = (p.kecamatan || '').toLowerCase();
+      const fKec = filterKecamatan.toLowerCase();
+      if (!pKec.includes(fKec)) return false;
+    }
+    if (filterDesa !== 'ALL') {
+      const pDesa = (p.desa || '').toLowerCase();
+      const fDesa = filterDesa.toLowerCase();
+      if (!pDesa.includes(fDesa)) return false;
+    }
     if (filterSumber !== 'ALL' && p.sumberUsulan !== filterSumber) return false;
     if (filterSipd !== 'ALL' && (p.sipdStatus || 'draft') !== filterSipd) return false;
     if (filterSearch.trim()) {
@@ -629,48 +691,176 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 </select>
               </div>
 
-              {/* WILAYAH: KECAMATAN & DESA SE-KAB NAGEKEO */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Kecamatan (Kab. Nagekeo) *
-                </label>
-                <select
-                  required
-                  value={formData.kecamatan}
-                  onChange={e => {
-                    const newKec = e.target.value;
-                    const defaultDesa = wilayahList.find(k => k.kecamatan === newKec)?.desaList[0] || '';
-                    setFormData({ ...formData, kecamatan: newKec, desa: defaultDesa });
-                  }}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                >
-                  <option value="" disabled>Pilih Kecamatan</option>
-                  {wilayahList.map(k => (
-                    <option key={k.kecamatan} value={k.kecamatan}>Kecamatan {k.kecamatan}</option>
-                  ))}
-                </select>
-              </div>
+              {/* WILAYAH: KECAMATAN & DESA SE-KAB NAGEKEO (MULTI-SELECT SUPPORTED) */}
+              <div className="md:col-span-3 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-600" />
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Lokasi Wilayah (Kecamatan & Desa / Kelurahan)
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                    Bisa Pilih Lebih Dari 1 (Lintas Wilayah / Jalan / Irigasi)
+                  </span>
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Desa / Kelurahan *
-                </label>
-                <select
-                  required
-                  value={formData.desa}
-                  onChange={e => setFormData({...formData, desa: e.target.value})}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                >
-                  <option value="" disabled>Pilih Desa/Kelurahan</option>
-                  {currentKecDesaList.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* MULTI KECAMATAN */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      1. Pilih Kecamatan (Bisa Multi-Select) *
+                    </label>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Lokasi Spesifik / Dusun / RT *</label>
-                <input required type="text" placeholder="Contoh: Dusun 2, RT 04 / Ruas Jl. Danga" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                    {/* Selected Kecamatan Badges */}
+                    <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-white border border-slate-300 rounded-xl items-center">
+                      {selectedKecList.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic">Belum ada kecamatan dipilih (Klik checkbox di bawah)</span>
+                      ) : (
+                        selectedKecList.map(k => (
+                          <span key={k} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-xs border border-emerald-300">
+                            Kec. {k}
+                            <button
+                              type="button"
+                              onClick={() => toggleKecamatan(k)}
+                              className="hover:bg-emerald-200 rounded p-0.5"
+                            >
+                              <X className="w-3 h-3 text-emerald-800" />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Checkbox List Kecamatan */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto space-y-1.5">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 text-[10px]">
+                        <span className="font-bold text-slate-500">Daftar Kecamatan Kab. Nagekeo</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedKecList.length === wilayahList.length) {
+                              setSelectedKecList([]);
+                              setFormData(prev => ({ ...prev, kecamatan: '' }));
+                            } else {
+                              const allKec = wilayahList.map(w => w.kecamatan);
+                              setSelectedKecList(allKec);
+                              setFormData(prev => ({ ...prev, kecamatan: allKec.join(', ') }));
+                            }
+                          }}
+                          className="text-emerald-700 font-bold hover:underline"
+                        >
+                          {selectedKecList.length === wilayahList.length ? 'Hapus Semua' : 'Pilih Semua (Lintas Kab)'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        {wilayahList.map(w => (
+                          <label key={w.kecamatan} className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 p-1.5 rounded-lg cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={selectedKecList.includes(w.kecamatan)}
+                              onChange={() => toggleKecamatan(w.kecamatan)}
+                              className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span>Kec. {w.kecamatan}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MULTI DESA */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      2. Pilih Desa / Kelurahan (Bisa Multi-Select) *
+                    </label>
+
+                    {/* Selected Desa Badges */}
+                    <div className="flex flex-wrap gap-1.5 min-h-[38px] p-2 bg-white border border-slate-300 rounded-xl items-center">
+                      {selectedDesaList.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic">Belum ada desa/kelurahan dipilih</span>
+                      ) : (
+                        selectedDesaList.map(d => (
+                          <span key={d} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-900 font-bold text-xs border border-blue-300">
+                            {d}
+                            <button
+                              type="button"
+                              onClick={() => toggleDesa(d)}
+                              className="hover:bg-blue-200 rounded p-0.5"
+                            >
+                              <X className="w-3 h-3 text-blue-800" />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Checkbox List Desa grouped by selected Kecamatans */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto space-y-2">
+                      {selectedKecList.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic text-center py-4">
+                          Silakan centang Kecamatan terlebih dahulu di sebelah kiri.
+                        </p>
+                      ) : (
+                        wilayahList
+                          .filter(w => selectedKecList.includes(w.kecamatan))
+                          .map(w => (
+                            <div key={w.kecamatan} className="space-y-1">
+                              <div className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                Kecamatan {w.kecamatan}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1 pl-1">
+                                {w.desaList.map(d => (
+                                  <label key={d} className="flex items-center gap-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 p-1 rounded cursor-pointer transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedDesaList.includes(d)}
+                                      onChange={() => toggleDesa(d)}
+                                      className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <span className="truncate">{d}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                      )}
+                    </div>
+
+                    {/* Custom Desa Input */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="+ Tambah Desa/Lokasi Khusus Lainnya"
+                        value={customDesaInput}
+                        onChange={e => setCustomDesaInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomDesa(); } }}
+                        className="flex-1 text-xs border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomDesa}
+                        className="bg-emerald-600 text-white font-bold text-xs px-3 py-1.5 rounded-xl hover:bg-emerald-700 shadow-sm"
+                      >
+                        Tambah
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200">
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Detail Lokasi Spesifik / Nama Ruas Jalan / DTA Irigasi / Dusun / RT *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Contoh: Ruas Jalan Danga - Marapokot (KM 0+000 s/d KM 4+500) / Daerah Irigasi Aegela"
+                    value={formData.location}
+                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
               </div>
 
               {/* POKIR MULTIPLE PENGUSUL SECTION */}

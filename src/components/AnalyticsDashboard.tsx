@@ -184,14 +184,30 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   });
 
   filteredProposals.forEach(p => {
-    const kec = p.kecamatan || 'Lainnya / Luar Wilayah';
-    if (!kecamatanMap[kec]) {
-      kecamatanMap[kec] = { count: 0, totalBudget: 0, approvedCount: 0 };
-    }
-    kecamatanMap[kec].count += 1;
-    kecamatanMap[kec].totalBudget += (p.estimatedBudget || 0);
-    if (p.isAkomodirRenja || p.status === 'diterima') {
-      kecamatanMap[kec].approvedCount += 1;
+    const rawKec = p.kecamatan ? p.kecamatan.trim() : '';
+    if (!rawKec) {
+      const kec = 'Lainnya / Luar Wilayah';
+      if (!kecamatanMap[kec]) {
+        kecamatanMap[kec] = { count: 0, totalBudget: 0, approvedCount: 0 };
+      }
+      kecamatanMap[kec].count += 1;
+      kecamatanMap[kec].totalBudget += (p.estimatedBudget || 0);
+      if (p.isAkomodirRenja || p.status === 'diterima' || p.status === 'disetujui') {
+        kecamatanMap[kec].approvedCount += 1;
+      }
+    } else {
+      const kecList = rawKec.split(',').map(s => s.trim()).filter(Boolean);
+      const uniqueKecs: string[] = Array.from(new Set<string>(kecList));
+      uniqueKecs.forEach((kec: string) => {
+        if (!kecamatanMap[kec]) {
+          kecamatanMap[kec] = { count: 0, totalBudget: 0, approvedCount: 0 };
+        }
+        kecamatanMap[kec].count += 1;
+        kecamatanMap[kec].totalBudget += (p.estimatedBudget || 0);
+        if (p.isAkomodirRenja || p.status === 'diterima' || p.status === 'disetujui') {
+          kecamatanMap[kec].approvedCount += 1;
+        }
+      });
     }
   });
 
