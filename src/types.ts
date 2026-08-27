@@ -29,6 +29,34 @@ export const SUMBER_DANA_LIST = [
   'Dana Desa (APBDes / APBN)',
   'Pinjaman / Hibah / Lainnya'
 ];
+
+export interface SumberDanaItem {
+  id: string;
+  kodeDana?: string;
+  namaSumberDana: string;
+  kategori?: string; // e.g. 'PAD', 'Transfer Pusat', 'Transfer Provinsi', 'Lainnya'
+  keterangan?: string;
+  paguTotal?: number;
+  isActive?: boolean;
+  updatedAt?: string;
+}
+
+export interface SshItem {
+  id: string;
+  kodeSsh?: string;
+  kategori: string;
+  uraian: string;
+  spesifikasi: string;
+  satuan: string;
+  minPrice: number;
+  maxPrice: number;
+  programId?: string;
+  kegiatanId?: string;
+  subKegiatanId?: string;
+  subKegiatanName?: string;
+  updatedAt?: string;
+}
+
 export type SipdStatus = 'draft' | 'siap_sipd' | 'sudah_sipd' | 'ditolak_sipd';
 export interface JenisBelanjaItem {
   id: string;

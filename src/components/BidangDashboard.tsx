@@ -11,8 +11,11 @@ import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, 
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
 import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
-import { JenisBelanjaItem } from '../types';
+import { JenisBelanjaItem, SumberDanaItem, SshItem, RenjaSubKegiatan, RenjaProgram } from '../types';
 import { getAllJenisBelanja } from '../services/jenisBelanjaService';
+import { getAllSumberDana } from '../services/sumberDanaService';
+import { getAllSshItems } from '../services/sshService';
+import { getRenjaMasterData } from '../services/renjaService';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -52,14 +55,19 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [filterSumber, setFilterSumber] = useState('ALL');
   const [filterSipd, setFilterSipd] = useState('ALL');
 
-  // Master Jenis Belanja State
+  // Master Dynamic Data States
   const [jenisBelanjaList, setJenisBelanjaList] = useState<JenisBelanjaItem[]>([]);
+  const [sumberDanaList, setSumberDanaList] = useState<SumberDanaItem[]>([]);
+  const [sshList, setSshList] = useState<SshItem[]>([]);
+  const [renjaSubKegiatanList, setRenjaSubKegiatanList] = useState<RenjaSubKegiatan[]>([]);
+  const [renjaProgramList, setRenjaProgramList] = useState<RenjaProgram[]>([]);
 
   // Form State
   const [formData, setFormData] = useState({
     tahunUsulan: '2025',
     jenisUsulan: 'Baru',
     sumberUsulan: 'Musrenbang Desa / Kelurahan',
+    sumberDanaTarget: '',
     jenisBelanja: '',
     jenisBelanjaId: '',
     kecamatan: '',
@@ -68,6 +76,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     activityName: '',
     projectName: '',
     sshId: '',
+    renjaSubKegiatanId: '',
     location: '',
     estimatedBudget: '',
     justification: '',
@@ -231,14 +240,29 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [configsData, wData, jbData] = await Promise.all([
+        const [configsData, wData, jbData, sdData, sshData, renjaData] = await Promise.all([
           getAllBidangConfigs(),
           getNagekeoWilayah(),
-          getAllJenisBelanja()
+          getAllJenisBelanja(),
+          getAllSumberDana(),
+          getAllSshItems(),
+          getRenjaMasterData()
         ]);
         setConfigs(configsData);
         setWilayahList(wData);
         setJenisBelanjaList(jbData);
+        setSumberDanaList(sdData);
+        setSshList(sshData);
+        setRenjaSubKegiatanList(renjaData.subKegiatan || []);
+        setRenjaProgramList(renjaData.programs || []);
+
+        if (sdData.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            sumberDanaTarget: prev.sumberDanaTarget || sdData[0].namaSumberDana
+          }));
+        }
+
         if (!selectedBidangId && configsData.length > 0) {
           handleBidangSelect(configsData[0].id);
         }
@@ -415,10 +439,10 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     }
 
     if (formData.sshId) {
-      const sshItem = SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId);
+      const sshItem = sshList.find(s => s.id === formData.sshId) || SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId);
       if (sshItem) {
         if (numericBudget < sshItem.minPrice || numericBudget > sshItem.maxPrice) {
-           alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) di luar Rentang Harga SSH SIPD untuk kategori ini (${formatRupiah(sshItem.minPrice)} - ${formatRupiah(sshItem.maxPrice)}).`);
+           alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) di luar Rentang Harga SSH SIPD untuk kategori "${sshItem.uraian}" (${formatRupiah(sshItem.minPrice)} - ${formatRupiah(sshItem.maxPrice)}).`);
            return;
         }
       }
@@ -989,6 +1013,70 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 </div>
               )}
 
+              {/* TARGET SUMBER DANA & RENJA INTEGRATION */}
+              <div className="md:col-span-3 bg-blue-50/60 border border-blue-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-blue-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-700" />
+                    <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider">
+                      Target Sumber Dana & Sub-Kegiatan RENJA OPD (Sinkronisasi SIPD)
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-blue-900 bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-300">
+                    Sinkron APBD & SIPD RI
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-blue-900 block mb-1">
+                      Pilih Nomenklatur Sumber Dana *
+                    </label>
+                    <select
+                      required
+                      value={formData.sumberDanaTarget}
+                      onChange={e => setFormData({ ...formData, sumberDanaTarget: e.target.value })}
+                      className="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">-- Pilih Target Sumber Dana --</option>
+                      {sumberDanaList.map(sd => (
+                        <option key={sd.id} value={sd.namaSumberDana}>
+                          [{sd.kategori}] {sd.namaSumberDana} {sd.kodeDana ? `(${sd.kodeDana})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-blue-900 block mb-1">
+                      Pilih Sub-Kegiatan RENJA (Otomasikan Program & Kegiatan)
+                    </label>
+                    <select
+                      value={formData.renjaSubKegiatanId}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        const sub = renjaSubKegiatanList.find(s => s.id === selectedId);
+                        const prog = sub ? renjaProgramList.find(p => p.id === sub.programId) : undefined;
+                        setFormData({
+                          ...formData,
+                          renjaSubKegiatanId: selectedId,
+                          programName: prog ? prog.namaProgram : (sub?.namaKegiatan || formData.programName),
+                          activityName: sub ? (sub.namaKegiatan || sub.namaSubKegiatan) : formData.activityName
+                        });
+                      }}
+                      className="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">-- Bebas / Usulan Manual --</option>
+                      {renjaSubKegiatanList.map(sub => (
+                        <option key={sub.id} value={sub.id}>
+                          [{sub.kodeSubKegiatan}] {sub.namaSubKegiatan} (Pagu: {formatRupiah(sub.paguSubKegiatan)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Nama Program *</label>
                 {selectedConfig?.budgetRules && selectedConfig.budgetRules.length > 0 ? (
@@ -1018,33 +1106,43 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                 <input required type="text" placeholder="Contoh: 150000000" value={formData.estimatedBudget} onChange={e => setFormData({...formData, estimatedBudget: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-blue-900" />
               </div>
 
+              {/* DYNAMIC SSH MASTER SELECTOR */}
               <div className="md:col-span-3 space-y-1">
-                <label className="text-xs font-bold text-slate-700">Kategori Standar Satuan Harga (SSH) SIPD</label>
+                <label className="text-xs font-bold text-slate-700">Pilih Standar Satuan Harga (SSH) SIPD Admin</label>
                 <select
                   value={formData.sshId}
                   onChange={e => {
                     const id = e.target.value;
-                    const item = SSH_TIK_NAGEKEO.find(s => s.id === id);
+                    const item = sshList.find(s => s.id === id) || SSH_TIK_NAGEKEO.find(s => s.id === id);
                     setFormData({
                       ...formData, 
                       sshId: id,
-                      projectName: item ? item.uraian : formData.projectName
+                      projectName: item ? item.uraian : formData.projectName,
+                      estimatedBudget: item ? String(item.minPrice) : formData.estimatedBudget
                     });
                   }}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-blue-50"
+                  className="w-full border border-purple-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 font-semibold bg-purple-50/50"
                 >
-                  <option value="">-- Usulan Kustom (Tidak Menggunakan SSH) --</option>
-                  {SSH_TIK_NAGEKEO.map(ssh => (
+                  <option value="">-- Usulan Kustom (Tanpa Referensi SSH) --</option>
+                  {(sshList.length > 0 ? sshList : SSH_TIK_NAGEKEO).map(ssh => (
                     <option key={ssh.id} value={ssh.id}>
-                      {ssh.kategori} - {ssh.uraian} ({formatRupiah(ssh.minPrice)} - {formatRupiah(ssh.maxPrice)})
+                      [{ssh.kategori}] {ssh.uraian} ({formatRupiah(ssh.minPrice)} - {formatRupiah(ssh.maxPrice)} / {ssh.satuan || 'Unit'})
                     </option>
                   ))}
                 </select>
-                {formData.sshId && (
-                  <div className="text-[11px] text-blue-700 bg-blue-100 p-2 rounded-lg mt-1 border border-blue-200">
-                    <strong>Spesifikasi:</strong> {SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId)?.spesifikasi}
-                  </div>
-                )}
+                {formData.sshId && (() => {
+                  const selectedSsh = sshList.find(s => s.id === formData.sshId) || SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId);
+                  if (!selectedSsh) return null;
+                  return (
+                    <div className="text-[11px] text-purple-900 bg-purple-100/80 p-2.5 rounded-xl mt-1 border border-purple-200 space-y-0.5">
+                      <div><strong>Spesifikasi:</strong> {selectedSsh.spesifikasi || '-'}</div>
+                      <div className="flex items-center justify-between text-[10px] pt-1">
+                        <span><strong>Satuan:</strong> {selectedSsh.satuan || 'Unit'}</span>
+                        <span className="font-extrabold text-purple-950">Acuan Rentang: {formatRupiah(selectedSsh.minPrice)} s/d {formatRupiah(selectedSsh.maxPrice)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="md:col-span-3 space-y-1">
                 <label className="text-xs font-bold text-slate-700">Nama Usulan / Pekerjaan (Otomatis / Manual) *</label>

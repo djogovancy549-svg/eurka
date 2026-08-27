@@ -28,6 +28,8 @@ import { formatRupiah } from '../utils';
 import BudgetRulesManager from './BudgetRulesManager';
 import SecurityMaintenance from './SecurityMaintenance';
 import JenisBelanjaManager from './JenisBelanjaManager';
+import SumberDanaManager from './SumberDanaManager';
+import SshManager from './SshManager';
 
 interface SettingsProps {
   userEmail?: string;
@@ -36,7 +38,7 @@ interface SettingsProps {
 }
 
 export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userName = 'Administrator ', isAdmin = true }: SettingsProps) {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'jenis_belanja' | 'cost_rules' | 'security' | 'wilayah_bidang' | 'requirements'>('jenis_belanja');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'jenis_belanja' | 'sumber_dana' | 'ssh_master' | 'cost_rules' | 'security' | 'wilayah_bidang' | 'requirements'>('jenis_belanja');
 
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -279,10 +281,10 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
       )}
 
       {/* Main Tab Navigation */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setActiveSettingsTab('jenis_belanja')}
-          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeSettingsTab === 'jenis_belanja'
               ? 'border-emerald-600 text-emerald-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -291,30 +293,40 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
           <Coins className="w-4 h-4 text-amber-500" /> Pagu & Master Jenis Belanja
         </button>
         <button
-          onClick={() => setActiveSettingsTab('cost_rules')}
-          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeSettingsTab === 'cost_rules'
+          onClick={() => setActiveSettingsTab('sumber_dana')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'sumber_dana'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <SlidersHorizontal className="w-4 h-4" /> Standar Biaya & Persentase
+          <Wallet className="w-4 h-4 text-blue-500" /> Master Nomenklatur Sumber Dana
         </button>
         <button
-          onClick={() => setActiveSettingsTab('security')}
-          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeSettingsTab === 'security'
-              ? 'border-emerald-600 text-emerald-600'
+          onClick={() => setActiveSettingsTab('ssh_master')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'ssh_master'
+              ? 'border-purple-600 text-purple-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <ShieldCheck className="w-4 h-4" /> Keamanan & Pemeliharaan Berkala
+          <SlidersHorizontal className="w-4 h-4 text-purple-500" /> Master Standar Satuan Harga (SSH)
+        </button>
+        <button
+          onClick={() => setActiveSettingsTab('cost_rules')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'cost_rules'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Sliders className="w-4 h-4" /> Standar Biaya & Persentase
         </button>
         <button
           onClick={() => setActiveSettingsTab('wilayah_bidang')}
-          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeSettingsTab === 'wilayah_bidang'
-              ? 'border-indigo-600 text-indigo-600'
+              ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
@@ -322,7 +334,7 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
         </button>
         <button
           onClick={() => setActiveSettingsTab('requirements')}
-          className={`pb-3 px-4 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeSettingsTab === 'requirements'
               ? 'border-purple-600 text-purple-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -330,11 +342,31 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
         >
           <FileCheck2 className="w-4 h-4" /> Syarat Kelayakan Dokumen
         </button>
+        <button
+          onClick={() => setActiveSettingsTab('security')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+            activeSettingsTab === 'security'
+              ? 'border-slate-800 text-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-slate-700" /> Keamanan System
+        </button>
       </div>
 
       {/* TAB 0: PAGU & JENIS BELANJA MANAGER */}
       {activeSettingsTab === 'jenis_belanja' && (
         <JenisBelanjaManager userEmail={userEmail} isAdmin={isAdmin} />
+      )}
+
+      {/* TAB 1: MASTER SUMBER DANA */}
+      {activeSettingsTab === 'sumber_dana' && (
+        <SumberDanaManager userEmail={userEmail} isAdmin={isAdmin} />
+      )}
+
+      {/* TAB 2: MASTER STANDAR SATUAN HARGA (SSH) */}
+      {activeSettingsTab === 'ssh_master' && (
+        <SshManager userEmail={userEmail} isAdmin={isAdmin} />
       )}
 
       {/* TAB 1: COST RULES & PERCENTAGES */}
