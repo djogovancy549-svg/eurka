@@ -92,17 +92,63 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
   // Register with global refresh button in top navigation bar
   useRegisterRefresh('analytics-dashboard', loadAllData);
 
+  // Dynamically collect all available years from input data & default list
+  const availableYears = React.useMemo(() => {
+    const yearsSet = new Set<string>();
+
+    // Baseline years
+    const currentYear = new Date().getFullYear();
+    for (let y = 2024; y <= Math.max(2027, currentYear + 2); y++) {
+      yearsSet.add(y.toString());
+    }
+
+    // Add years from Proposals
+    proposals.forEach(p => {
+      if (p.tahunUsulan && String(p.tahunUsulan).trim()) {
+        yearsSet.add(String(p.tahunUsulan).trim());
+      }
+    });
+
+    // Add years from DPA Items
+    dpaItems.forEach(d => {
+      if (d.tahun && String(d.tahun).trim()) {
+        yearsSet.add(String(d.tahun).trim());
+      }
+    });
+
+    // Add years from SPPD Records
+    sppdRecords.forEach(s => {
+      if (s.tanggalBerangkat) {
+        const y = s.tanggalBerangkat.slice(0, 4);
+        if (y && y.length === 4 && !isNaN(Number(y))) {
+          yearsSet.add(y);
+        }
+      }
+    });
+
+    return Array.from(yearsSet).sort((a, b) => Number(a) - Number(b));
+  }, [proposals, dpaItems, sppdRecords]);
+
   // Filtered dataset
   const filteredProposals = proposals.filter(p => {
-    if (filterTahun !== 'Semua' && p.tahunUsulan !== filterTahun) return false;
+    if (filterTahun !== 'Semua' && String(p.tahunUsulan) !== filterTahun) return false;
     if (filterBidang !== 'Semua' && p.jenisUsulan !== filterBidang && p.programName !== filterBidang) return false;
     if (filterSumberUsulan !== 'Semua' && p.sumberUsulan !== filterSumberUsulan) return false;
     return true;
   });
 
   const filteredDpa = dpaItems.filter(d => {
-    if (filterTahun !== 'Semua' && d.tahun !== filterTahun) return false;
+    if (filterTahun !== 'Semua' && String(d.tahun) !== filterTahun) return false;
     if (filterBidang !== 'Semua' && d.bidangPengampu !== filterBidang) return false;
+    return true;
+  });
+
+  const filteredSppd = sppdRecords.filter(s => {
+    if (filterTahun !== 'Semua') {
+      const year = s.tanggalBerangkat ? s.tanggalBerangkat.slice(0, 4) : '';
+      if (year && year !== filterTahun) return false;
+    }
+    if (filterBidang !== 'Semua' && s.bidangPengampu !== filterBidang) return false;
     return true;
   });
 
@@ -128,8 +174,8 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
     ? (filteredDpa.reduce((acc, d) => acc + (d.realisasiFisik || 0), 0) / filteredDpa.length).toFixed(1)
     : '0';
 
-  const totalSppdNominal = sppdRecords.reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
-  const totalSppdCair = sppdRecords.filter(s => s.statusPencairan === 'Cair (SP2D)').reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+  const totalSppdNominal = filteredSppd.reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
+  const totalSppdCair = filteredSppd.filter(s => s.statusPencairan === 'Cair (SP2D)').reduce((acc, s) => acc + (s.totalBiaya || 0), 0);
 
   // Group by Kecamatan
   const kecamatanMap: Record<string, { count: number; totalBudget: number; approvedCount: number }> = {};
@@ -273,9 +319,9 @@ export default function AnalyticsDashboard({ userEmail, userName, isAdmin }: Ana
               className="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold text-xs text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="Semua">Semua Tahun</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
             </select>
           </div>
 
