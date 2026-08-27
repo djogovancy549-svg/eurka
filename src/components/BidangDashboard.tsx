@@ -5,6 +5,7 @@ import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagekeoWilayah } from '../services/configService';
+import { getProposalsByBidang } from '../services/proposalService';
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
@@ -316,52 +317,8 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     
     try {
       setLoading(true);
-      const token = await getAccessToken();
-      if (!token) return;
-      
-      const rows = await getRows(token, sheetId, 'Proposals!A2:X');
-      const formatted = rows.map((r: any[], index: number) => {
-        let reqs = {};
-        try { reqs = JSON.parse(r[10] || '{}'); } catch (e) {}
-        let atts = [];
-        try { atts = JSON.parse(r[15] || '[]'); } catch (e) {}
-        let pokirArr: string[] = [];
-        try { 
-          if (r[20]) {
-            pokirArr = r[20].startsWith('[') ? JSON.parse(r[20]) : r[20].split(',').map((s: string) => s.trim());
-          }
-        } catch (e) {}
-        
-        return {
-          id: r[0],
-          rowIndex: index + 2,
-          submittedAt: r[1],
-          tahunUsulan: r[2],
-          programName: r[3],
-          activityName: r[4],
-          projectName: r[5],
-          location: r[6],
-          estimatedBudget: parseMoney(r[7]),
-          justification: r[8],
-          zoomLink: r[9],
-          requirementsMet: reqs,
-          submittedBy: r[11],
-          documentFolderUrl: r[12] || '',
-          status: (r[13] as any) || 'pending',
-          adminNotes: r[14] || '',
-          attachments: atts,
-          jenisUsulan: r[16],
-          sumberUsulan: r[17] || '',
-          kecamatan: r[18] || '',
-          desa: r[19] || '',
-          pengusulPokir: pokirArr,
-          sipdStatus: (r[21] as SipdStatus) || 'draft',
-          sipdRegistrationNo: r[22] || '',
-          sipdNotes: r[23] || ''
-        } as Proposal;
-      });
-      
-      setProposals(formatted.reverse());
+      const data = await getProposalsByBidang(selectedBidangId, sheetId);
+      setProposals(data.reverse());
     } catch (err) {
       console.error('Failed to fetch proposals', err);
       setProposals([]);
@@ -1043,13 +1000,15 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                         >
                           Detail
                         </button>
-                        <button
-                          onClick={() => handleDelete(p.rowIndex!)}
-                          className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                          title="Hapus Data"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {p.status !== 'disetujui' && (
+                          <button
+                            onClick={() => handleDelete(p.rowIndex!)}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                            title="Hapus Data"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
