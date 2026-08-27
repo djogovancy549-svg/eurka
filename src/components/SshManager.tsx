@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calculator, 
   Plus, 
@@ -60,13 +60,22 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
     subKegiatanId: ''
   });
 
-  const categories = [
+  const DEFAULT_CATEGORIES = [
     'A. BELANJA MODAL PERANGKAT LUNAK (PEMBUATAN SISTEM & SOURCE CODE)',
     'B. BELANJA SEWA INFRASTRUKTUR CLOUD & LAYANAN PIHAK KETIGA',
     'C. BELANJA JASA PEMELIHARAAN SISTEM & DUKUNGAN TEKNIS (SLA)',
     'D. BELANJA SEWA APLIKASI PIHAK KETIGA (SOFTWARE AS A SERVICE / MANAGED SERVICE)',
     'E. BELANJA MODAL INFRASTRUKTUR FISIK PUPR & LAINNYA'
   ];
+
+  const [customCategoryList, setCustomCategoryList] = useState<string[]>([]);
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState<boolean>(false);
+
+  const allCategories = useMemo(() => {
+    const fromItems = items.map(i => i.kategori).filter(Boolean);
+    const set = new Set([...DEFAULT_CATEGORIES, ...fromItems, ...customCategoryList]);
+    return Array.from(set);
+  }, [items, customCategoryList]);
 
   useEffect(() => {
     loadData();
@@ -90,10 +99,11 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setIsCustomCategoryMode(false);
     setFormData({
       id: 'ssh_' + Date.now(),
       kodeSsh: `SSH-${items.length + 1}`,
-      kategori: 'A. BELANJA MODAL PERANGKAT LUNAK (PEMBUATAN SISTEM & SOURCE CODE)',
+      kategori: DEFAULT_CATEGORIES[0],
       uraian: '',
       spesifikasi: '',
       satuan: 'Paket',
@@ -106,6 +116,7 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
 
   const handleOpenEditModal = (item: SshItem) => {
     setEditingItem(item);
+    setIsCustomCategoryMode(!allCategories.includes(item.kategori));
     setFormData({
       id: item.id,
       kodeSsh: item.kodeSsh || item.id,
@@ -275,7 +286,7 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
             className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50"
           >
             <option value="ALL">Semua Kategori SSH</option>
-            {categories.map(c => (
+            {allCategories.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -441,19 +452,51 @@ export default function SshManager({ onDataChanged }: SshManagerProps) {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Kategori SSH *
-                  </label>
-                  <select
-                    required
-                    value={formData.kategori}
-                    onChange={e => setFormData({ ...formData, kategori: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50"
-                  >
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      Kategori SSH *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomCategoryMode(!isCustomCategoryMode);
+                      }}
+                      className="text-[10px] font-bold text-purple-700 hover:text-purple-900 underline flex items-center gap-1"
+                    >
+                      {isCustomCategoryMode ? '← Pilih dari Daftar' : '+ Tambah Custom Kategori SSH'}
+                    </button>
+                  </div>
+
+                  {isCustomCategoryMode ? (
+                    <input
+                      required
+                      type="text"
+                      placeholder="Ketik Nomenklatur Kategori SSH (mis: F. BELANJA MODAL MESIN & ALAT BERAT PUPR)"
+                      value={formData.kategori}
+                      onChange={e => setFormData({ ...formData, kategori: e.target.value })}
+                      className="w-full border border-purple-400 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50/50"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={formData.kategori}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__ADD_NEW__') {
+                          setIsCustomCategoryMode(true);
+                          setFormData({ ...formData, kategori: '' });
+                        } else {
+                          setFormData({ ...formData, kategori: val });
+                        }
+                      }}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50"
+                    >
+                      {allCategories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__ADD_NEW__" className="font-bold text-purple-700">+ Tambah Custom Kategori SSH Baru...</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

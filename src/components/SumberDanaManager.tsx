@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, 
   Plus, 
@@ -43,13 +43,22 @@ export default function SumberDanaManager({ onDataChanged }: SumberDanaManagerPr
     isActive: true
   });
 
-  const categories = [
+  const DEFAULT_CATEGORIES = [
     'PAD (Pendapatan Asli Daerah)',
     'Transfer Pemerintah Pusat',
     'Transfer Pemerintah Provinsi',
     'Pinjaman / DAK / DBH Spesifik',
     'Lainnya / Hibah'
   ];
+
+  const [customCategoryList, setCustomCategoryList] = useState<string[]>([]);
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState<boolean>(false);
+
+  const allCategories = useMemo(() => {
+    const fromItems = items.map(i => i.kategori).filter(Boolean);
+    const set = new Set([...DEFAULT_CATEGORIES, ...fromItems, ...customCategoryList]);
+    return Array.from(set);
+  }, [items, customCategoryList]);
 
   useEffect(() => {
     loadData();
@@ -69,11 +78,12 @@ export default function SumberDanaManager({ onDataChanged }: SumberDanaManagerPr
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setIsCustomCategoryMode(false);
     setFormData({
       id: 'sd_' + Date.now(),
       kodeDana: `5.0.${items.length + 1}`,
       namaSumberDana: '',
-      kategori: 'PAD (Pendapatan Asli Daerah)',
+      kategori: DEFAULT_CATEGORIES[0],
       keterangan: '',
       isActive: true
     });
@@ -82,6 +92,7 @@ export default function SumberDanaManager({ onDataChanged }: SumberDanaManagerPr
 
   const handleOpenEditModal = (item: SumberDanaItem) => {
     setEditingItem(item);
+    setIsCustomCategoryMode(!allCategories.includes(item.kategori));
     setFormData({ ...item });
     setShowModal(true);
   };
@@ -230,7 +241,7 @@ export default function SumberDanaManager({ onDataChanged }: SumberDanaManagerPr
             className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
           >
             <option value="ALL">Semua Kategori</option>
-            {categories.map(c => (
+            {allCategories.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -396,19 +407,49 @@ export default function SumberDanaManager({ onDataChanged }: SumberDanaManagerPr
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Kategori Penerimaan *
-                </label>
-                <select
-                  required
-                  value={formData.kategori || categories[0]}
-                  onChange={e => setFormData({ ...formData, kategori: e.target.value })}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
-                >
-                  {categories.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">
+                    Kategori Penerimaan *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomCategoryMode(!isCustomCategoryMode)}
+                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 underline flex items-center gap-1"
+                  >
+                    {isCustomCategoryMode ? '← Pilih dari Daftar' : '+ Tambah Custom Kategori'}
+                  </button>
+                </div>
+
+                {isCustomCategoryMode ? (
+                  <input
+                    required
+                    type="text"
+                    placeholder="Ketik Nomenklatur Kategori Penerimaan..."
+                    value={formData.kategori}
+                    onChange={e => setFormData({ ...formData, kategori: e.target.value })}
+                    className="w-full border border-blue-400 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/50"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={formData.kategori || DEFAULT_CATEGORIES[0]}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '__ADD_NEW__') {
+                        setIsCustomCategoryMode(true);
+                        setFormData({ ...formData, kategori: '' });
+                      } else {
+                        setFormData({ ...formData, kategori: val });
+                      }
+                    }}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                  >
+                    {allCategories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__ADD_NEW__" className="font-bold text-blue-700">+ Tambah Custom Kategori Baru...</option>
+                  </select>
+                )}
               </div>
 
               <div>

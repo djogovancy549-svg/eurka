@@ -1,6 +1,6 @@
 import { IndependenceDayBanner } from './IndependenceDayBanner';
 import React, { useState, useEffect, useRef } from 'react';
-import { getRows, appendRow } from '../sheetsApi';
+import { getRows, appendRow, updateRow } from '../sheetsApi';
 import { getAccessToken } from '../auth';
 import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
@@ -16,7 +16,7 @@ import { getAllJenisBelanja } from '../services/jenisBelanjaService';
 import { getAllSumberDana } from '../services/sumberDanaService';
 import { getAllSshItems } from '../services/sshService';
 import { getRenjaMasterData } from '../services/renjaService';
-import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins } from 'lucide-react';
+import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2, Coins, Lock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface BidangDashboardProps {
@@ -47,6 +47,15 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
   const [tempFolderUrl, setTempFolderUrl] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [selectedProposalDetail, setSelectedProposalDetail] = useState<Proposal | null>(null);
+
+  // Editing Proposal State
+  const [editingProposal, setEditingProposal] = useState<Proposal | null>(null);
+
+  const isProposalLocked = (p: Proposal) => {
+    // Verified or approved or integrated proposal cannot be edited/deleted by user
+    const lockedStatuses = ['diterima', 'disetujui', 'siap_sipd', 'ditolak'];
+    return lockedStatuses.includes(p.status) || p.sipdStatus === 'siap_sipd' || !!p.isAkomodirRenja;
+  };
 
   // Filters
   const [filterSearch, setFilterSearch] = useState('');
@@ -376,16 +385,20 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     localStorage.setItem('urk_selected_bidang', id);
   };
 
-  const handleDelete = async (rowIndex: number) => {
-    if (!selectedConfig?.sheetId) return;
-    if (!window.confirm('Yakin ingin menghapus usulan ini? Aksi ini tidak dapat dibatalkan.')) return;
+  const handleDelete = async (proposal: Proposal) => {
+    if (isProposalLocked(proposal)) {
+      alert(`🔒 Usulan "${proposal.projectName}" telah diverifikasi/diproses (status: ${proposal.status || 'diverifikasi'}), sehingga tidak dapat dihapus lagi oleh Pengusul. Silakan hubungi Admin.`);
+      return;
+    }
+    if (!proposal.rowIndex || !selectedConfig?.sheetId) return;
+    if (!window.confirm(`Yakin ingin menghapus usulan "${proposal.projectName}"? Aksi ini tidak dapat dibatalkan.`)) return;
 
     try {
       const token = await getAccessToken();
       if (!token) return;
 
       const { deleteProposalRow } = await import('../sheetsApi');
-      await deleteProposalRow(token, selectedConfig.sheetId, rowIndex);
+      await deleteProposalRow(token, selectedConfig.sheetId, proposal.rowIndex);
       
       setSuccessMsg('Data usulan berhasil dihapus.');
       setTimeout(() => setSuccessMsg(null), 3000);
@@ -394,6 +407,48 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       console.error('Failed to delete proposal', err);
       alert('Gagal menghapus data usulan.');
     }
+  };
+
+  const handleEditProposal = (proposal: Proposal) => {
+    if (isProposalLocked(proposal)) {
+      alert(`🔒 Usulan "${proposal.projectName}" telah diverifikasi/diproses (status: ${proposal.status || 'diverifikasi'}), sehingga tidak dapat diubah lagi oleh Pengusul. Silakan hubungi Admin jika ada penyesuaian.`);
+      return;
+    }
+
+    setEditingProposal(proposal);
+    setFormData({
+      tahunUsulan: proposal.tahunUsulan || '2025',
+      jenisUsulan: proposal.jenisUsulan || 'Baru',
+      sumberUsulan: proposal.sumberUsulan || 'Musrenbang Desa / Kelurahan',
+      sumberDanaTarget: proposal.sumberDanaTarget || '',
+      jenisBelanja: proposal.jenisBelanja || '',
+      jenisBelanjaId: proposal.jenisBelanjaId || '',
+      kecamatan: proposal.kecamatan || '',
+      desa: proposal.desa || '',
+      programName: proposal.programName || '',
+      activityName: proposal.activityName || '',
+      projectName: proposal.projectName || '',
+      sshId: proposal.sshId || '',
+      renjaSubKegiatanId: proposal.renjaSubKegiatanId || '',
+      nomorMusrenbangDesa: proposal.nomorMusrenbangDesa || '',
+      prioritasDesa: proposal.prioritasDesa || '',
+      beritaAcaraDesaUrl: proposal.beritaAcaraDesaUrl || '',
+      location: proposal.location || '',
+      estimatedBudget: proposal.estimatedBudget ? proposal.estimatedBudget.toString() : '',
+      justification: proposal.justification || '',
+      zoomLink: proposal.zoomLink || '',
+      reqs: proposal.requirementsMet || {}
+    });
+
+    if (proposal.kecamatan) {
+      setSelectedKecList(proposal.kecamatan.split(', ').filter(Boolean));
+    }
+    if (proposal.desa) {
+      setSelectedDesaList(proposal.desa.split(', ').filter(Boolean));
+    }
+    setPokirList(proposal.pengusulPokir || []);
+    setAttachments(proposal.attachments || []);
+    setShowForm(true);
   };
 
   const fetchProposals = async (sheetId?: string) => {
@@ -456,60 +511,103 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       const token = await getAccessToken();
       if (!token) throw new Error('Not authenticated');
       const timestamp = new Date().toISOString();
-      const id = uuidv4().substring(0, 8);
-      
-      const rowData = [
-        id,                                // 0: ID
-        timestamp,                         // 1: Timestamp
-        formData.tahunUsulan,              // 2: Tahun Usulan
-        formData.programName,              // 3: Program Name
-        formData.activityName,             // 4: Activity Name
-        formData.projectName,              // 5: Project Name
-        formData.location,                 // 6: Location
-        numericBudget,                     // 7: Estimated Budget
-        formData.justification,            // 8: Justification
-        formData.zoomLink,                 // 9: Zoom Link
-        JSON.stringify(formData.reqs),     // 10: Requirements Met
-        userName || userEmail,             // 11: Submitter
-        configToUse?.folderUrl || '',      // 12: Folder URL
-        'pending',                         // 13: Status
-        '',                                // 14: Admin Notes
-        JSON.stringify(attachments),       // 15: Attachments
-        formData.jenisUsulan,              // 16: Jenis Usulan
-        formData.sumberUsulan,             // 17: Sumber Usulan
-        formData.kecamatan,                // 18: Kecamatan
-        formData.desa,                     // 19: Desa / Kelurahan
-        JSON.stringify(pokirList),         // 20: Pengusul Pokir
-        'draft',                           // 21: Status SIPD (Default draft pra-sipd)
-        '',                                // 22: No Registrasi SIPD
-        '',                                // 23: Catatan SIPD
-        '',                                // 24: JSON string for Priority (optional)
-        formData.sshId || '',              // 25: SSH ID
-        formData.nomorMusrenbangDesa || '',// 26: No BA Musrenbang Desa
-        formData.prioritasDesa || '',      // 27: Prioritas Desa
-        formData.beritaAcaraDesaUrl || '', // 28: Link Dokumen BA Desa
-      ];
-      await appendRow(token, configToUse.sheetId, 'Proposals!A:AC', rowData);
-      
-      await notifyAdminNewProposal();
-      try {
-        await addNotification({
-          title: `Usulan URK Baru: ${formData.projectName}`,
-          message: `Usulan baru dari ${userName || userEmail} (${selectedConfig?.name || 'Bidang'}) sebesar Rp ${Number(numericBudget || 0).toLocaleString('id-ID')} telah diajukan.`,
-          type: 'proposal_new',
-          targetRole: 'admin',
-          linkUrl: '/admin'
-        });
-        await addNotification({
-          title: 'Usulan Berhasil Dikirim',
-          message: `Usulan "${formData.projectName}" telah berhasil masuk ke sistem Pra-SIPD.`,
-          type: 'proposal_new',
-          targetRole: 'user',
-          targetUserEmail: userEmail
-        });
-      } catch (e) {}
+
+      if (editingProposal && editingProposal.rowIndex) {
+        // UPDATE EXISTING PROPOSAL
+        const updateRange = `Proposals!A${editingProposal.rowIndex}:AC${editingProposal.rowIndex}`;
+        const rowData = [
+          editingProposal.id,                                // 0: ID
+          editingProposal.submittedAt || timestamp,           // 1: Timestamp
+          formData.tahunUsulan,                              // 2: Tahun Usulan
+          formData.programName,                              // 3: Program Name
+          formData.activityName,                             // 4: Activity Name
+          formData.projectName,                              // 5: Project Name
+          formData.location,                                 // 6: Location
+          numericBudget,                                     // 7: Estimated Budget
+          formData.justification,                            // 8: Justification
+          formData.zoomLink,                                 // 9: Zoom Link
+          JSON.stringify(formData.reqs),                     // 10: Requirements Met
+          editingProposal.submittedBy || userName || userEmail, // 11: Submitter
+          configToUse?.folderUrl || '',                      // 12: Folder URL
+          editingProposal.status || 'pending',               // 13: Status
+          editingProposal.adminNotes || '',                  // 14: Admin Notes
+          JSON.stringify(attachments),                       // 15: Attachments
+          formData.jenisUsulan,                              // 16: Jenis Usulan
+          formData.sumberUsulan,                             // 17: Sumber Usulan
+          formData.kecamatan,                                // 18: Kecamatan
+          formData.desa,                                     // 19: Desa / Kelurahan
+          JSON.stringify(pokirList),                         // 20: Pengusul Pokir
+          editingProposal.sipdStatus || 'draft',             // 21: Status SIPD
+          editingProposal.sipdRegistrationNo || '',          // 22: No Registrasi SIPD
+          editingProposal.sipdNotes || '',                   // 23: Catatan SIPD
+          '',                                                // 24: JSON string priority
+          formData.sshId || '',                              // 25: SSH ID
+          formData.nomorMusrenbangDesa || '',                // 26: No BA Musrenbang Desa
+          formData.prioritasDesa || '',                      // 27: Prioritas Desa
+          formData.beritaAcaraDesaUrl || '',                 // 28: Link Dokumen BA Desa
+        ];
+
+        await updateRow(token, configToUse.sheetId, updateRange, rowData);
+        setSuccessMsg(`Usulan "${formData.projectName}" berhasil diperbarui!`);
+      } else {
+        // CREATE NEW PROPOSAL
+        const id = uuidv4().substring(0, 8);
+        const rowData = [
+          id,                                // 0: ID
+          timestamp,                         // 1: Timestamp
+          formData.tahunUsulan,              // 2: Tahun Usulan
+          formData.programName,              // 3: Program Name
+          formData.activityName,             // 4: Activity Name
+          formData.projectName,              // 5: Project Name
+          formData.location,                 // 6: Location
+          numericBudget,                     // 7: Estimated Budget
+          formData.justification,            // 8: Justification
+          formData.zoomLink,                 // 9: Zoom Link
+          JSON.stringify(formData.reqs),     // 10: Requirements Met
+          userName || userEmail,             // 11: Submitter
+          configToUse?.folderUrl || '',      // 12: Folder URL
+          'pending',                         // 13: Status
+          '',                                // 14: Admin Notes
+          JSON.stringify(attachments),       // 15: Attachments
+          formData.jenisUsulan,              // 16: Jenis Usulan
+          formData.sumberUsulan,             // 17: Sumber Usulan
+          formData.kecamatan,                // 18: Kecamatan
+          formData.desa,                     // 19: Desa / Kelurahan
+          JSON.stringify(pokirList),         // 20: Pengusul Pokir
+          'draft',                           // 21: Status SIPD (Default draft pra-sipd)
+          '',                                // 22: No Registrasi SIPD
+          '',                                // 23: Catatan SIPD
+          '',                                // 24: JSON string for Priority (optional)
+          formData.sshId || '',              // 25: SSH ID
+          formData.nomorMusrenbangDesa || '',// 26: No BA Musrenbang Desa
+          formData.prioritasDesa || '',      // 27: Prioritas Desa
+          formData.beritaAcaraDesaUrl || '', // 28: Link Dokumen BA Desa
+        ];
+        await appendRow(token, configToUse.sheetId, 'Proposals!A:AC', rowData);
+        
+        await notifyAdminNewProposal();
+        try {
+          await addNotification({
+            title: `Usulan URK Baru: ${formData.projectName}`,
+            message: `Usulan baru dari ${userName || userEmail} (${selectedConfig?.name || 'Bidang'}) sebesar Rp ${Number(numericBudget || 0).toLocaleString('id-ID')} telah diajukan.`,
+            type: 'proposal_new',
+            targetRole: 'admin',
+            linkUrl: '/admin'
+          });
+          await addNotification({
+            title: 'Usulan Berhasil Dikirim',
+            message: `Usulan "${formData.projectName}" telah berhasil masuk ke sistem Pra-SIPD.`,
+            type: 'proposal_new',
+            targetRole: 'user',
+            targetUserEmail: userEmail
+          });
+        } catch (e) {}
+
+        setSuccessMsg('Usulan berhasil dikirim sebagai data pra-SIPD!');
+      }
 
       setShowForm(false);
+      setEditingProposal(null);
       setFormData(prev => ({
         ...prev,
         projectName: '',
@@ -688,13 +786,15 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         </div>
       </section>
 
-      {/* FORM USULAN BARU */}
+      {/* FORM USULAN BARU ATAU EDIT */}
       {showForm && (
         <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden mb-6">
           <div className="px-6 py-4 border-b border-slate-100 bg-blue-50/70 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Plus className="w-5 h-5 text-blue-600" />
-              <h3 className="font-bold text-slate-900">Form Usulan Baru (Pra-SIPD) - {selectedConfig?.name}</h3>
+              {editingProposal ? <Edit2 className="w-5 h-5 text-indigo-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
+              <h3 className="font-bold text-slate-900">
+                {editingProposal ? `Edit Usulan URK: ${editingProposal.projectName}` : `Form Usulan Baru (Pra-SIPD) - ${selectedConfig?.name}`}
+              </h3>
             </div>
             <span className="text-xs font-semibold text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
               Kabupaten Nagekeo
@@ -1264,10 +1364,23 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-slate-700 text-xs font-bold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
-              <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50">
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingProposal(null);
+                }} 
+                className="px-4 py-2 text-slate-700 text-xs font-bold hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className={`flex items-center gap-2 text-white px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50 ${editingProposal ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Kirim Usulan ke Penampung Pra-SIPD
+                {editingProposal ? 'Simpan Perubahan Usulan' : 'Kirim Usulan ke Penampung Pra-SIPD'}
               </button>
             </div>
           </form>
@@ -1459,15 +1572,49 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => setSelectedProposalDetail(p)}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                          title="Lihat Detail Usulan"
                         >
                           Detail
                         </button>
-                        {p.status !== 'disetujui' && (
+
+                        {/* TOMBOL EDIT USULAN */}
+                        {isProposalLocked(p) ? (
                           <button
-                            onClick={() => handleDelete(p.rowIndex!)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                            title="Hapus Data"
+                            disabled
+                            onClick={() => handleEditProposal(p)}
+                            className="bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-not-allowed opacity-60"
+                            title="🔒 Usulan telah diverifikasi/diproses. Data terkunci dan tidak dapat diubah oleh Pengusul."
+                          >
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Edit</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleEditProposal(p)}
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                            title="Edit Data Usulan"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+
+                        {/* TOMBOL HAPUS USULAN */}
+                        {isProposalLocked(p) ? (
+                          <button
+                            disabled
+                            onClick={() => handleDelete(p)}
+                            className="bg-slate-100 text-slate-400 border border-slate-200 p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-not-allowed opacity-60"
+                            title="🔒 Usulan telah diverifikasi/diproses. Data terkunci dan tidak dapat dihapus oleh Pengusul."
+                          >
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDelete(p)}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 p-1.5 rounded-lg text-xs font-bold transition-colors"
+                            title="Hapus Data Usulan"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

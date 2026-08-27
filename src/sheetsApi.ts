@@ -240,6 +240,24 @@ export const updateCell = async (accessToken: string, spreadsheetId: string, ran
   }
 };
 
+export const updateRow = async (accessToken: string, spreadsheetId: string, range: string, values: any[]) => {
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      values: [values]
+    })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to update row at ${range}: ${errText}`);
+  }
+  return response.json();
+};
+
 export const deleteProposalRow = async (accessToken: string, spreadsheetId: string, rowIndex: number) => {
   // 1. Get the sheetId for 'Proposals'
   const metaResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
