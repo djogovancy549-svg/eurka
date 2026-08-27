@@ -6,6 +6,7 @@ import { useRequirements } from '../useRequirements';
 import { Proposal, BidangConfig, BIDANG_LIST, NON_BIDANG_UNITS, getUnitActiveRequirements, SUMBER_USULAN_OPTIONS, SipdStatus } from '../types';
 import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagekeoWilayah } from '../services/configService';
 import { getProposalsByBidang } from '../services/proposalService';
+import { addNotification } from '../services/notificationService';
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
@@ -401,6 +402,22 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       await appendRow(token, configToUse.sheetId, 'Proposals!A:Z', rowData);
       
       await notifyAdminNewProposal();
+      try {
+        await addNotification({
+          title: `Usulan URK Baru: ${formData.projectName}`,
+          message: `Usulan baru dari ${userName || userEmail} (${selectedConfig?.name || 'Bidang'}) sebesar Rp ${Number(numericBudget || 0).toLocaleString('id-ID')} telah diajukan.`,
+          type: 'proposal_new',
+          targetRole: 'admin',
+          linkUrl: '/admin'
+        });
+        await addNotification({
+          title: 'Usulan Berhasil Dikirim',
+          message: `Usulan "${formData.projectName}" telah berhasil masuk ke sistem Pra-SIPD.`,
+          type: 'proposal_new',
+          targetRole: 'user',
+          targetUserEmail: userEmail
+        });
+      } catch (e) {}
 
       setShowForm(false);
       setFormData(prev => ({

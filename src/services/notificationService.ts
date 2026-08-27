@@ -28,25 +28,32 @@ export const getNotifications = async (userEmail: string, isAdmin: boolean): Pro
     const cached = localStorage.getItem('cached_app_notifications');
     if (cached) {
       cachedNotifs = JSON.parse(cached);
-      if (Array.isArray(cachedNotifs) && cachedNotifs.length > 0) {
-        // Refresh in background
-        fetchFromFirestore();
-        return filterNotifsForUser(cachedNotifs, userEmail, isAdmin);
-      }
     }
   } catch (e) {}
 
   const fromDb = await fetchFromFirestore();
-  return filterNotifsForUser(fromDb, userEmail, isAdmin);
+  const map = new Map<string, AppNotification>();
+  (fromDb || []).forEach(n => map.set(n.id, n));
+  (cachedNotifs || []).forEach(n => {
+    if (!map.has(n.id)) map.set(n.id, n);
+  });
+  const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  try {
+    localStorage.setItem('cached_app_notifications', JSON.stringify(merged));
+  } catch (e) {}
+
+  return filterNotifsForUser(merged, userEmail, isAdmin);
 };
 
 const filterNotifsForUser = (notifs: AppNotification[], userEmail: string, isAdmin: boolean): AppNotification[] => {
   return notifs
     .filter(n => {
+      if (!n) return false;
       if (n.targetRole === 'all') return true;
       if (n.targetRole === 'admin' && isAdmin) return true;
-      if (n.targetRole === 'user' && !isAdmin) return true;
-      if (n.targetUserEmail && n.targetUserEmail.toLowerCase() === userEmail.toLowerCase()) return true;
+      if (n.targetRole === 'user') return true;
+      if (n.targetUserEmail && userEmail && n.targetUserEmail.toLowerCase() === userEmail.toLowerCase()) return true;
       return false;
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -94,6 +101,7 @@ export const addNotification = async (notif: Omit<AppNotification, 'id' | 'creat
 
   try {
     localStorage.setItem('cached_app_notifications', JSON.stringify(allNotifs));
+    window.dispatchEvent(new Event('app_notifications_updated'));
   } catch (e) {}
 
   try {
@@ -129,6 +137,7 @@ export const markNotificationAsRead = async (notificationId: string, userEmail: 
 
   try {
     localStorage.setItem('cached_app_notifications', JSON.stringify(allNotifs));
+    window.dispatchEvent(new Event('app_notifications_updated'));
   } catch (e) {}
 
   try {
@@ -163,6 +172,7 @@ export const markAllNotificationsAsRead = async (userEmail: string, isAdmin: boo
 
   try {
     localStorage.setItem('cached_app_notifications', JSON.stringify(allNotifs));
+    window.dispatchEvent(new Event('app_notifications_updated'));
   } catch (e) {}
 
   try {
@@ -181,6 +191,7 @@ export const markAllNotificationsAsRead = async (userEmail: string, isAdmin: boo
 export const clearNotifications = async (): Promise<void> => {
   try {
     localStorage.setItem('cached_app_notifications', JSON.stringify([]));
+    window.dispatchEvent(new Event('app_notifications_updated'));
   } catch (e) {}
 
   try {

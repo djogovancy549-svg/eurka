@@ -369,6 +369,16 @@ export default function RenjaDashboard({ userEmail, userName, isAdmin = true }: 
     const { updatedProposal, updatedRenja } = await unlinkUrkFromRenja(prop, renjaData);
     setRenjaData(updatedRenja);
     setAllProposals(prev => prev.map(p => p.id === updatedProposal.id ? updatedProposal : p));
+
+    try {
+      await addNotification({
+        title: 'Penautan RENJA Dilepas',
+        message: `Usulan "${prop.projectName}" telah dilepas dari penautan Sub-Kegiatan RENJA.`,
+        type: 'renja_linked',
+        targetRole: 'all',
+        targetUserEmail: prop.submittedBy
+      });
+    } catch (e) {}
   };
 
   const handleClearAll = async () => {

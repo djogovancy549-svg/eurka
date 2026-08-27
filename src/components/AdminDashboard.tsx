@@ -10,6 +10,7 @@ import { getAllBidangConfigs, saveBidangConfig, deleteBidangConfig, getNagekeoWi
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD, printRekapitulasiPrioritas, exportCsvPrioritas } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa } from '../data/nagekeoWilayah';
 import { getAllPriorityEvaluations } from '../services/priorityService';
+import { addNotification } from '../services/notificationService';
 import { useRegisterRefresh } from '../context/RefreshContext';
 import PriorityScoringModal from './PriorityScoringModal';
 import { Video, MapPin, DollarSign, Calendar, Info, Loader2, ExternalLink, Edit2, Settings, Save, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Plus, Trash2, ShieldCheck, Tag, Users, Layers, X, CheckSquare, Award, Sliders } from 'lucide-react';
@@ -123,6 +124,18 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       await updateCell(token, selectedConfig.sheetId, `Proposals!N${proposal.rowIndex}`, newStatus);
       setProposals(proposals.map(p => p.id === proposal.id ? { ...p, status: newStatus as any } : p));
       setSuccessMsg(`Status usulan diperbarui menjadi ${newStatus}`);
+      
+      try {
+        const statusLabel = newStatus === 'disetujui' ? 'DISETUJUI' : newStatus === 'ditolak' ? 'DITOLAK (Perlu Dilengkapi)' : 'PENDING';
+        await addNotification({
+          title: `Status Usulan: ${statusLabel}`,
+          message: `Usulan "${proposal.projectName}" telah ${statusLabel} oleh Admin.`,
+          type: 'proposal_status',
+          targetRole: 'all',
+          targetUserEmail: proposal.submittedBy
+        });
+      } catch (e) {}
+
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (e) {
       console.error('Failed to update status', e);
@@ -169,6 +182,17 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
 
       setVerifyingSipdProposal(null);
       setSuccessMsg('Verifikasi status SIPD berhasil diperbarui ke Google Sheets!');
+      
+      try {
+        await addNotification({
+          title: 'Status Pra-SIPD Diperbarui',
+          message: `Usulan "${verifyingSipdProposal.projectName}" kini berstatus ${tempSipdStatus.toUpperCase()} ${tempSipdRegNo ? `(No Reg: ${tempSipdRegNo})` : ''}.`,
+          type: 'proposal_status',
+          targetRole: 'all',
+          targetUserEmail: verifyingSipdProposal.submittedBy
+        });
+      } catch (e) {}
+
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (e) {
       console.error('Failed to update SIPD status', e);

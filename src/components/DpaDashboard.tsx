@@ -11,6 +11,7 @@ import {
   importRenjaToDpa 
 } from '../services/dpaService';
 import { getRenjaMasterData } from '../services/renjaService';
+import { addNotification } from '../services/notificationService';
 import { 
   formatRupiah, 
   printDokumenDpa, 
@@ -225,6 +226,15 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
     await saveDpaMasterData(updatedDpaList, sppdList);
     setShowDpaModal(false);
     setEditingDpa(null);
+
+    try {
+      await addNotification({
+        title: editingDpa ? 'DPA Diperbarui' : 'Sub-Kegiatan DPA Baru',
+        message: `Sub-Kegiatan DPA "${dpaForm.namaSubKegiatan}" (${dpaForm.bidangPengampu}) ${editingDpa ? 'berhasil diperbarui' : 'telah ditambahkan'}.`,
+        type: 'dpa_updated',
+        targetRole: 'all'
+      });
+    } catch (e) {}
   };
 
   const handleDeleteDpa = async (id: string) => {
@@ -334,6 +344,15 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
     await saveDpaMasterData(dpaList, updatedSppdList);
     setShowSppdModal(false);
     setEditingSppd(null);
+
+    try {
+      await addNotification({
+        title: `SPPD ${sppdForm.namaPelaksana || 'Perjalanan Dinas'}`,
+        message: `Arsip SPPD a.n ${sppdForm.namaPelaksana} (${sppdForm.maksudPerjalanan}) ${editingSppd ? 'diperbarui' : 'telah dibuat'} dengan status ${sppdForm.statusPencairan || 'Disetujui'}.`,
+        type: 'sppd_submitted',
+        targetRole: 'all'
+      });
+    } catch (e) {}
   };
 
   const handleDeleteSppd = async (id: string) => {
@@ -370,6 +389,15 @@ export default function DpaDashboard({ userEmail, userName, isAdmin }: DpaDashbo
 
     setSppdList(updated);
     await saveDpaMasterData(dpaList, updated);
+
+    try {
+      await addNotification({
+        title: `Pencairan SPPD: ${newStatus}`,
+        message: `Status pencairan SPPD a.n ${sppd.namaPelaksana} diubah menjadi ${newStatus} ${sp2d ? `(No SP2D: ${sp2d})` : ''}.`,
+        type: newStatus === 'Cair (SP2D)' ? 'sppd_cair' : 'sppd_submitted',
+        targetRole: 'all'
+      });
+    } catch (e) {}
   };
 
   // Filtered DPA items

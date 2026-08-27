@@ -45,9 +45,14 @@ export default function NotificationCenter({ userEmail, isAdmin }: NotificationC
 
   useEffect(() => {
     loadNotifs();
-    // Poll every 15 seconds for fresh notifications
-    const interval = setInterval(loadNotifs, 15000);
-    return () => clearInterval(interval);
+    // Poll every 8 seconds for fresh notifications
+    const interval = setInterval(loadNotifs, 8000);
+    const handleUpdate = () => loadNotifs();
+    window.addEventListener('app_notifications_updated', handleUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('app_notifications_updated', handleUpdate);
+    };
   }, [userEmail, isAdmin]);
 
   // Click outside to close
