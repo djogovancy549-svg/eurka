@@ -86,6 +86,7 @@ export async function getProposalsByBidang(bidangId: string, sheetId?: string): 
         programName: r[3],
         activityName: r[4],
         projectName: r[5],
+        sshId: r[25] || "",
         location: r[6],
         estimatedBudget: parseMoney(r[7]),
         justification: r[8],

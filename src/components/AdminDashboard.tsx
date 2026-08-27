@@ -187,7 +187,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
       case 'revisi':
         return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
       case 'ditolak':
-        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
+        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak (Bank Data Evaluasi)</span>;
       default:
         return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
     }
@@ -793,7 +793,7 @@ export default function AdminDashboard({ userEmail, userName }: AdminDashboardPr
                         <option value="diterima">Diterima Teknis</option>
                         <option value="belum_lengkap">Belum Lengkap</option>
                         <option value="revisi">Revisi</option>
-                        <option value="ditolak">Ditolak</option>
+                        <option value="ditolak">Ditolak (Evaluasi Tahun Depan)</option>
                       </select>
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">

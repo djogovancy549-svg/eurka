@@ -8,6 +8,7 @@ import { getAllBidangConfigs, saveBidangConfig, notifyAdminNewProposal, getNagek
 import { parseMoney, formatRupiah, printRekapanDisetujui, printRekapanSiapSIPD, exportCsvSIPD } from '../utils';
 import { DEFAULT_NAGEKEO_WILAYAH, KecamatanDesa, countTotalDesa } from '../data/nagekeoWilayah';
 import { useRegisterRefresh } from '../context/RefreshContext';
+import { SSH_TIK_NAGEKEO } from '../data/sshKominfo';
 import { Plus, Video, MapPin, DollarSign, Calendar, Info, Loader2, Save, ExternalLink, Edit2, Folder, CheckCircle, Clock, AlertTriangle, RefreshCw, XCircle, Printer, Download, Users, Layers, ShieldCheck, Tag, X, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -57,6 +58,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
     programName: '',
     activityName: '',
     projectName: '',
+    sshId: '',
     location: '',
     estimatedBudget: '',
     justification: '',
@@ -135,7 +137,7 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       case 'revisi':
         return <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-purple-200"><RefreshCw className="w-3 h-3" /> Di-revisi</span>;
       case 'ditolak':
-        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak</span>;
+        return <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-red-200"><XCircle className="w-3 h-3" /> Ditolak (Bank Data Evaluasi)</span>;
       default:
         return <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-yellow-200"><Clock className="w-3 h-3" /> Menunggu Verifikasi</span>;
     }
@@ -394,11 +396,20 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
       }
     }
 
+    if (formData.sshId) {
+      const sshItem = SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId);
+      if (sshItem) {
+        if (numericBudget < sshItem.minPrice || numericBudget > sshItem.maxPrice) {
+           alert(`Gagal mengirim: Anggaran usulan (${formatRupiah(numericBudget)}) di luar Rentang Harga SSH SIPD untuk kategori ini (${formatRupiah(sshItem.minPrice)} - ${formatRupiah(sshItem.maxPrice)}).`);
+           return;
+        }
+      }
+    }
+
     try {
       setIsSubmitting(true);
       const token = await getAccessToken();
       if (!token) throw new Error('Not authenticated');
-
       const timestamp = new Date().toISOString();
       const id = uuidv4().substring(0, 8);
       
@@ -426,10 +437,11 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
         JSON.stringify(pokirList),         // 20: Pengusul Pokir
         'draft',                           // 21: Status SIPD (Default draft pra-sipd)
         '',                                // 22: No Registrasi SIPD
-        ''                                 // 23: Catatan SIPD
+        '',                                // 23: Catatan SIPD
+        '',                                // 24: JSON string for Priority (optional)
+        formData.sshId || '',              // 25: SSH ID
       ];
-
-      await appendRow(token, configToUse.sheetId, 'Proposals!A:X', rowData);
+      await appendRow(token, configToUse.sheetId, 'Proposals!A:Z', rowData);
       
       await notifyAdminNewProposal();
 
@@ -756,8 +768,36 @@ export default function BidangDashboard({ userEmail, userName }: BidangDashboard
               </div>
 
               <div className="md:col-span-3 space-y-1">
-                <label className="text-xs font-bold text-slate-700">Nama Usulan / Pekerjaan Fisik *</label>
-                <input required type="text" placeholder="Contoh: Pembangunan Tembok Penahan Tanah dan Rabat Beton Desa Aeramo" value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+                <label className="text-xs font-bold text-slate-700">Kategori Standar Satuan Harga (SSH) SIPD</label>
+                <select
+                  value={formData.sshId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    const item = SSH_TIK_NAGEKEO.find(s => s.id === id);
+                    setFormData({
+                      ...formData, 
+                      sshId: id,
+                      projectName: item ? item.uraian : formData.projectName
+                    });
+                  }}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-blue-50"
+                >
+                  <option value="">-- Usulan Kustom (Tidak Menggunakan SSH) --</option>
+                  {SSH_TIK_NAGEKEO.map(ssh => (
+                    <option key={ssh.id} value={ssh.id}>
+                      {ssh.kategori} - {ssh.uraian} ({formatRupiah(ssh.minPrice)} - {formatRupiah(ssh.maxPrice)})
+                    </option>
+                  ))}
+                </select>
+                {formData.sshId && (
+                  <div className="text-[11px] text-blue-700 bg-blue-100 p-2 rounded-lg mt-1 border border-blue-200">
+                    <strong>Spesifikasi:</strong> {SSH_TIK_NAGEKEO.find(s => s.id === formData.sshId)?.spesifikasi}
+                  </div>
+                )}
+              </div>
+              <div className="md:col-span-3 space-y-1">
+                <label className="text-xs font-bold text-slate-700">Nama Usulan / Pekerjaan (Otomatis / Manual) *</label>
+                <input required type="text" placeholder="Contoh: Pembangunan Tembok Penahan Tanah..." value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
               </div>
 
               <div className="md:col-span-3 space-y-1">

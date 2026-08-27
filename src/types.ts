@@ -52,6 +52,7 @@ export interface Proposal {
   id: string;
   rowIndex?: number;
   projectName: string;
+  sshId?: string;
   programName?: string;
   activityName?: string;
   tahunUsulan?: string;

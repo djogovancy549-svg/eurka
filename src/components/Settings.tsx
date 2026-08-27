@@ -34,7 +34,7 @@ interface SettingsProps {
   isAdmin?: boolean;
 }
 
-export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userName = 'Administrator DPUPR', isAdmin = true }: SettingsProps) {
+export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userName = 'Administrator ', isAdmin = true }: SettingsProps) {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'wilayah_bidang' | 'cost_rules' | 'security' | 'requirements'>('cost_rules');
 
   const [configs, setConfigs] = useState<BidangConfig[]>([]);
@@ -265,7 +265,7 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
             Konfigurasi & Administrasi Sistem
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mt-1">
-            Atur batas besaran biaya operasional, ATK, jasa perencanaan/pengawasan, keamanan siber, dan master wilayah DPUPR Kabupaten Nagekeo.
+            Atur batas besaran biaya operasional, ATK, jasa perencanaan/pengawasan, keamanan siber, dan master wilayah  Kabupaten Nagekeo.
           </p>
         </div>
       </div>
@@ -484,9 +484,9 @@ export default function Settings({ userEmail = 'admin@nagekeokab.go.id', userNam
             )}
           </div>
 
-          {/* Pengaturan Unit Usulan & Bidang DPUPR */}
+          {/* Pengaturan Unit Usulan & Bidang  */}
           <div className="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 border-b-4 border-b-blue-500">
-            <h3 className="text-base font-extrabold text-slate-900 mb-1">Pengaturan Unit Usulan & Bidang DPUPR</h3>
+            <h3 className="text-base font-extrabold text-slate-900 mb-1">Pengaturan Unit Usulan & Bidang </h3>
             <p className="text-xs text-slate-500 mb-4">Atur Pagu Indikatif, Google Spreadsheet ID, dan Google Drive URL untuk setiap Bidang dan Unit.</p>
             
             {loadingConfigs ? (
